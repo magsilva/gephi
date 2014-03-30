@@ -55,8 +55,8 @@ import org.openide.util.NbBundle;
 
 //Inspired from infovis.graph.io;
 //Original author Jean-Daniel Fekete
-public class ImporterGML implements FileImporter, LongTask {
-
+public class ImporterGML implements FileImporter, LongTask
+{
     //Architecture
     private Reader reader;
     private ContainerLoader container;
@@ -64,6 +64,28 @@ public class ImporterGML implements FileImporter, LongTask {
     private ProgressTicket progressTicket;
     private boolean cancel = false;
 
+    private static final char STRING_DELIMITER = '"';
+    
+    private static final char LIST_BEGIN = '[';
+
+    private static final char LIST_END = ']';
+    
+    private static final String NODE_ID = "id";
+    
+    private static final String NODE_LABEL = "label";
+    
+    private static final String EDGE_SOURCE = "source";
+
+    private static final String EDGE_TARGET = "target";
+
+    private static final String EDGE_WEIGHT = "weight";
+  
+    private static final String EDGE_VALUE = "value";
+
+    private static final String EDGE_LABEL = "label";
+    
+    private static final String EDGE_TYPE_DIRECTED = "directed";
+    
     @Override
     public boolean execute(ContainerLoader container) {
         this.container = container;
@@ -80,13 +102,12 @@ public class ImporterGML implements FileImporter, LongTask {
     private void importData(LineNumberReader reader) throws Exception {
         Progress.start(progressTicket);
 
-        ArrayList<Object> list;
-        list = parseList(reader);
+        ArrayList<Object> list = parseList(reader);
 
         boolean ret = false;
         for (int i = 0; i < list.size(); i++) {
             if ("graph".equals(list.get(i)) && list.size() >= i + 2 && list.get(i + 1) instanceof ArrayList) {
-                ret = parseGraph((ArrayList) list.get(i + 1));
+                ret = parseGraph((ArrayList<?>) list.get(i + 1));
             }
         }
         if (!ret) {
@@ -100,44 +121,49 @@ public class ImporterGML implements FileImporter, LongTask {
 
         ArrayList<Object> list = new ArrayList<Object>();
         char t;
-        boolean readString = false;
-        String stringBuffer = new String();
+        boolean readingString = false;
+        StringBuilder stringBuffer = new StringBuilder();
 
         while (reader.ready()) {
             t = (char) reader.read();
-            if (readString) {
-                if (t == '"') {
-                    list.add(stringBuffer);
-                    stringBuffer = new String();
-                    readString = false;
+            if (readingString) {
+                if (t == STRING_DELIMITER) {
+                    list.add(stringBuffer.toString());
+                    stringBuffer.setLength(0);
+                    readingString = false;
                 } else {
-                    stringBuffer += t;
+                    stringBuffer.append(t);
                 }
             } else {
                 switch (t) {
-                    case '[':
+                    case LIST_BEGIN:
                         list.add(parseList(reader));
                         break;
-                    case ']':
+                    case LIST_END:
                         return list;
-                    case '"':
-                        readString = true;
+                    case STRING_DELIMITER:
+                        readingString = true;
                         break;
                     case ' ':
                     case '\t':
                     case '\n':
-                        if (!stringBuffer.isEmpty()) {
+                        if (stringBuffer.length() == 0) {
                             try {
-                                Double doubleValue = Double.valueOf(stringBuffer);
-                                list.add(doubleValue);
-                            } catch (NumberFormatException e) {
-                                list.add(stringBuffer);
+                            	Integer intValue = Integer.valueOf(stringBuffer.toString());
+                            	list.add(intValue);
+                            } catch (NumberFormatException eInt) {
+	                        	try {
+	                                Double doubleValue = Double.valueOf(stringBuffer.toString());
+	                                list.add(doubleValue);
+	                            } catch (NumberFormatException eDouble) {
+	                            	list.add(stringBuffer.toString()); // Actually add an empty string
+	                            }
                             }
-                            stringBuffer = new String();
+                            stringBuffer.setLength(0);
                         }
                         break;
                     default:
-                        stringBuffer += t;
+                        stringBuffer.append(t);
                         break;
                 }
             }
@@ -145,7 +171,7 @@ public class ImporterGML implements FileImporter, LongTask {
         return list;
     }
 
-    private boolean parseGraph(ArrayList list) {
+    private boolean parseGraph(ArrayList<?> list) {
         if ((list.size() & 1) != 0) {
             return false;
         }
@@ -156,12 +182,12 @@ public class ImporterGML implements FileImporter, LongTask {
             Object key = list.get(i);
             Object value = list.get(i + 1);
             if ("node".equals(key)) {
-                ret = parseNode((ArrayList) value);
+                ret = parseNode((ArrayList<?>) value);
             } else if ("edge".equals(key)) {
-                ret = parseEdge((ArrayList) value);
-            } else if ("directed".equals(key)) {
-                if (value instanceof Double) {
-                    EdgeDirectionDefault edgeDefault = ((Double) value) == 1 ? EdgeDirectionDefault.DIRECTED : EdgeDirectionDefault.UNDIRECTED;
+                ret = parseEdge((ArrayList<?>) value);
+            } else if (EDGE_TYPE_DIRECTED.equalsIgnoreCase((String) key)) {
+                if (value instanceof Integer) {
+                    EdgeDirectionDefault edgeDefault = ((Integer) value) == 1 ? EdgeDirectionDefault.DIRECTED : EdgeDirectionDefault.UNDIRECTED;
                     container.setEdgeDefault(edgeDefault);
                 } else {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_directedgraphparse"), Issue.Level.WARNING));
@@ -179,15 +205,15 @@ public class ImporterGML implements FileImporter, LongTask {
         return ret;
     }
 
-    private boolean parseNode(ArrayList list) {
+    private boolean parseNode(ArrayList<?> list) {
         String id = null;
         String label = null;
-        for (int i = 0; i < list.size(); i += 2) {
+        for (int i = 0; i < list.size() && (id == null || label == null); i += 2) {
             String key = (String) list.get(i);
             Object value = list.get(i + 1);
-            if ("id".equalsIgnoreCase(key)) {
+            if (id == null && NODE_ID.equalsIgnoreCase(key)) {
                 id = value.toString();
-            } else if ("label".equalsIgnoreCase(key)) {
+            } else if (label == null && NODE_LABEL.equalsIgnoreCase(key)) {
                 label = value.toString();
             }
         }
@@ -196,29 +222,29 @@ public class ImporterGML implements FileImporter, LongTask {
             node = container.factory().newNodeDraft(id);
         } else {
             node = container.factory().newNodeDraft();
+            report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_nodeidmissing"), Issue.Level.WARNING));
         }
+        
         if (label != null) {
             node.setLabel(label);
         }
-        if (id == null) {
-            report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_nodeidmissing"), Issue.Level.WARNING));
-        }
+
         boolean ret = addNodeAttributes(node, "", list);
         container.addNode(node);
         return ret;
     }
 
-    private boolean addNodeAttributes(NodeDraft node, String prefix, ArrayList list) {
+    private boolean addNodeAttributes(NodeDraft node, String prefix, ArrayList<?> list) {
         boolean ret = true;
         for (int i = 0; i < list.size(); i += 2) {
             String key = (String) list.get(i);
             Object value = list.get(i + 1);
-            if ("id".equalsIgnoreCase(key) || "label".equalsIgnoreCase(key)) {
+            if (NODE_ID.equalsIgnoreCase(key) || NODE_LABEL.equalsIgnoreCase(key)) {
                 continue; // already parsed
             }
             if (value instanceof ArrayList) {
                 // keep the  hierarchy
-                ret = addNodeAttributes(node, prefix + "." + key, (ArrayList) value);
+                ret = addNodeAttributes(node, prefix + "." + key, (ArrayList<?>) value);
                 if (!ret) {
                     break;
                 }
@@ -251,22 +277,22 @@ public class ImporterGML implements FileImporter, LongTask {
         return ret;
     }
 
-    private boolean parseEdge(ArrayList list) {
+    private boolean parseEdge(ArrayList<?> list) {
         EdgeDraft edgeDraft = container.factory().newEdgeDraft();
         for (int i = 0; i < list.size(); i += 2) {
             String key = (String) list.get(i);
             Object value = list.get(i + 1);
-            if ("source".equals(key)) {
+            if (EDGE_SOURCE.equalsIgnoreCase(key)) {
                 NodeDraft source = container.getNode(value.toString());
                 edgeDraft.setSource(source);
-            } else if ("target".equals(key)) {
+            } else if (EDGE_TARGET.equalsIgnoreCase(key)) {
                 NodeDraft target = container.getNode(value.toString());
                 edgeDraft.setTarget(target);
-            } else if ("value".equals(key) || "weight".equals(key)) {
+            } else if (EDGE_VALUE.equalsIgnoreCase(key) || EDGE_WEIGHT.equalsIgnoreCase(key)) {
                 if (value instanceof Double) {
                     edgeDraft.setWeight(((Double) value).floatValue());
                 }
-            } else if ("label".equals(key)) {
+            } else if (EDGE_LABEL.equalsIgnoreCase(key)) {
                 edgeDraft.setLabel(value.toString());
             }
         }
@@ -275,23 +301,23 @@ public class ImporterGML implements FileImporter, LongTask {
         return ret;
     }
 
-    private boolean addEdgeAttributes(EdgeDraft edge, String prefix, ArrayList list) {
+    private boolean addEdgeAttributes(EdgeDraft edge, String prefix, ArrayList<?> list) {
         boolean ret = true;
         for (int i = 0; i < list.size(); i += 2) {
             String key = (String) list.get(i);
             Object value = list.get(i + 1);
-            if ("source".equalsIgnoreCase(key) || "target".equalsIgnoreCase(key) || "value".equalsIgnoreCase(key) || "weight".equalsIgnoreCase(key) || "label".equalsIgnoreCase(key)) {
+            if (EDGE_SOURCE.equalsIgnoreCase(key) || EDGE_TARGET.equalsIgnoreCase(key) || EDGE_VALUE.equalsIgnoreCase(key) || EDGE_WEIGHT.equalsIgnoreCase(key) || EDGE_LABEL.equalsIgnoreCase(key)) {
                 continue; // already parsed
             }
             if (value instanceof ArrayList) {
                 // keep the hierarchy
-                ret = addEdgeAttributes(edge, prefix + "." + key, (ArrayList) value);
+                ret = addEdgeAttributes(edge, prefix + "." + key, (ArrayList<?>) value);
                 if (!ret) {
                     break;
                 }
-            } else if ("directed".equalsIgnoreCase(key)) {
-                if (value instanceof Double) {
-                    EdgeDirection type = ((Double) value) == 1 ? EdgeDirection.DIRECTED : EdgeDirection.UNDIRECTED;
+            } else if (EDGE_TYPE_DIRECTED.equalsIgnoreCase(key)) {
+                if (value instanceof Integer) {
+                    EdgeDirection type = ((Integer) value) == 1 ? EdgeDirection.DIRECTED : EdgeDirection.UNDIRECTED;
                     edge.setType(type);
                 } else {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_directedparse", edge.toString()), Issue.Level.WARNING));
