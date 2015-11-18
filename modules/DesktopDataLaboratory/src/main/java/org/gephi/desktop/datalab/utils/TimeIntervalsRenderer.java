@@ -44,20 +44,18 @@ package org.gephi.desktop.datalab.utils;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.image.BufferedImage;
-import java.util.List;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
-import org.gephi.data.attributes.type.Interval;
-import org.gephi.data.attributes.type.TimeInterval;
-import org.gephi.dynamic.api.DynamicModel.TimeFormat;
+import org.gephi.graph.api.TimeFormat;
+import org.gephi.graph.api.types.IntervalSet;
 import org.gephi.utils.TimeIntervalGraphics;
 
 /**
- * TableCellRenderer for drawing time intervals graphics from cells that have a TimeInterval as their value.
+ * TableCellRenderer for drawing time intervals graphics from cells that have a IntervalSet as their value.
  *
- * @author Eduardo Ramos <eduramiba@gmail.com>
+ * @author Eduardo Ramos
  */
 public class TimeIntervalsRenderer extends DefaultTableCellRenderer {
 
@@ -65,10 +63,18 @@ public class TimeIntervalsRenderer extends DefaultTableCellRenderer {
     private static final Color UNSELECTED_BACKGROUND = Color.white;
     private static final Color FILL_COLOR = new Color(153, 255, 255);
     private static final Color BORDER_COLOR = new Color(2, 104, 255);
-    private boolean drawGraphics;
-    private TimeIntervalGraphics timeIntervalGraphics;
+    private boolean drawGraphics = false;
+    private final TimeIntervalGraphics timeIntervalGraphics;
     private TimeFormat timeFormat = TimeFormat.DOUBLE;
 
+    public TimeIntervalsRenderer() {
+        this(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+    }
+
+    public TimeIntervalsRenderer(double min, double max) {
+        timeIntervalGraphics = new TimeIntervalGraphics(min, max);
+    }
+    
     public TimeIntervalsRenderer(double min, double max, boolean drawGraphics) {
         timeIntervalGraphics = new TimeIntervalGraphics(min, max);
         this.drawGraphics = drawGraphics;
@@ -80,8 +86,8 @@ public class TimeIntervalsRenderer extends DefaultTableCellRenderer {
             //Render empty string when null
             return super.getTableCellRendererComponent(table, null, isSelected, hasFocus, row, column);
         }
-        TimeInterval timeInterval = (TimeInterval) value;
-        String stringRepresentation = timeInterval.toString(timeFormat == TimeFormat.DOUBLE);
+        IntervalSet intervalSet = (IntervalSet) value;
+        String stringRepresentation = intervalSet.toString(timeFormat);
         if (drawGraphics) {
             JLabel label = new JLabel();
             Color background;
@@ -90,13 +96,14 @@ public class TimeIntervalsRenderer extends DefaultTableCellRenderer {
             } else {
                 background = UNSELECTED_BACKGROUND;
             }
+            
+            double[] intervals = intervalSet.getIntervals();
 
-            List<Interval<Double[]>> intervals = timeInterval.getIntervals();
-            double starts[] = new double[intervals.size()];
-            double ends[] = new double[intervals.size()];
-            for (int i = 0; i < intervals.size(); i++) {
-                starts[i] = intervals.get(i).getLow();
-                ends[i] = intervals.get(i).getHigh();
+            double starts[] = new double[intervals.length / 2];
+            double ends[] = new double[intervals.length / 2];
+            for (int i = 0; i < intervals.length; i+=2) {
+                starts[i] = intervals[i];
+                ends[i] = intervals[i + 1];
             }
 
             final BufferedImage i = timeIntervalGraphics.createTimeIntervalImage(starts, ends, table.getColumnModel().getColumn(column).getWidth() - 1, table.getRowHeight(row) - 1, FILL_COLOR, BORDER_COLOR, background);
@@ -141,6 +148,7 @@ public class TimeIntervalsRenderer extends DefaultTableCellRenderer {
     }
 
     public void setMinMax(double min, double max) {
-        timeIntervalGraphics = new TimeIntervalGraphics(min, max);
+        timeIntervalGraphics.setMin(min);
+        timeIntervalGraphics.setMax(max);
     }
 }

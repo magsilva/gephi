@@ -45,8 +45,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JCheckBox;
 import net.miginfocom.swing.MigLayout;
-import org.gephi.data.attributes.api.AttributeColumn;
-import org.gephi.data.attributes.api.AttributeTable;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.Table;
 import org.netbeans.validation.api.Problems;
 import org.netbeans.validation.api.Severity;
 import org.netbeans.validation.api.ui.ValidationGroup;
@@ -61,18 +61,18 @@ import org.openide.util.NbBundle;
  */
 public class AvailableColumnsPanel extends javax.swing.JPanel {
 
-    private final AttributeTable table;
+    private final Table table;
     private final AvailableColumnsModel availableColumnsModel;
-    private AttributeColumn[] columns;
+    private Column[] columns;
     private JCheckBox[] columnsCheckBoxes;
     private AvailableColumnsValidator validator;
 
     /** Creates new form AvailableColumnsPanel */
-    public AvailableColumnsPanel(AttributeTable table, AvailableColumnsModel availableColumnsModel) {
+    public AvailableColumnsPanel(Table table, AvailableColumnsModel availableColumnsModel) {
         initComponents();
         this.table = table;
         this.availableColumnsModel = availableColumnsModel;
-        columns = table.getColumns();
+        columns = table.toArray();
         refreshColumns();
         refreshAvailableColumnsControls();
     }
@@ -120,6 +120,7 @@ public class AvailableColumnsPanel extends javax.swing.JPanel {
             this.index = index;
         }
 
+        @Override
         public void actionPerformed(ActionEvent e) {
             if (columnsCheckBoxes[index].isSelected()) {
                 availableColumnsModel.addAvailableColumn(columns[index]);

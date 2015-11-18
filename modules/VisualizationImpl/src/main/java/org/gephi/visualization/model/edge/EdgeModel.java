@@ -42,8 +42,8 @@
 package org.gephi.visualization.model.edge;
 
 import java.awt.geom.Rectangle2D;
-import javax.media.opengl.GL2;
-import javax.media.opengl.glu.GLU;
+import com.jogamp.opengl.GL2;
+import com.jogamp.opengl.glu.GLU;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.ElementProperties;
 import org.gephi.visualization.VizModel;
@@ -51,17 +51,12 @@ import org.gephi.visualization.model.Model;
 import org.gephi.visualization.model.TextModel;
 import org.gephi.visualization.model.node.NodeModel;
 
-/**
- *
- * @author mbastian
- */
 public abstract class EdgeModel implements Model, TextModel {
 
     protected final Edge edge;
+    protected float weight;
     //Flags
     protected boolean selected;
-    //Text
-    protected Rectangle2D bounds;
     //Mark
     public int markTime;
     //Id
@@ -95,6 +90,14 @@ public abstract class EdgeModel implements Model, TextModel {
         return selected;
     }
 
+    public float getWeight() {
+        return weight;
+    }
+
+    public void setWeight(float weight) {
+        this.weight = weight;
+    }
+
     @Override
     public boolean hasCustomTextColor() {
         return edge.getTextProperties().getR() > 0;
@@ -107,34 +110,17 @@ public abstract class EdgeModel implements Model, TextModel {
 
     @Override
     public float getTextWidth() {
-        Rectangle2D rec = bounds;
-        if (rec != null) {
-            return (float) rec.getWidth();
-        }
-        return 0f;
+        return edge.getTextProperties().getWidth();
     }
 
     @Override
     public float getTextHeight() {
-        Rectangle2D rec = bounds;
-        if (rec != null) {
-            return (float) rec.getHeight();
-        }
-        return 0f;
-    }
-
-    @Override
-    public void setTextBounds(Rectangle2D bounds) {
-        this.bounds = bounds;
+        return edge.getTextProperties().getHeight();
     }
 
     @Override
     public String getText() {
-        String t = edge.getTextProperties().getText();
-        if (t == null) {
-            return edge.getLabel();
-        }
-        return t;
+        return edge.getTextProperties().getText();
     }
 
     @Override

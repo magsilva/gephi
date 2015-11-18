@@ -43,6 +43,8 @@
 package org.gephi.io.exporter.plugin;
 
 import java.io.Writer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -55,14 +57,15 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import org.gephi.attribute.api.AttributeModel;
-import org.gephi.attribute.api.AttributeUtils;
-import org.gephi.attribute.api.Column;
+import org.gephi.graph.api.AttributeUtils;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
+import org.gephi.graph.api.EdgeIterable;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.NodeIterable;
 import org.gephi.io.exporter.api.FileType;
 import org.gephi.io.exporter.spi.CharacterExporter;
 import org.gephi.io.exporter.spi.GraphExporter;
@@ -88,8 +91,6 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
     private Workspace workspace;
     private Writer writer;
     private boolean exportVisible;
-    private GraphModel graphModel;
-    private AttributeModel attributeModel;
     //Settings
     private boolean normalize = false;
     private boolean exportColors = true;
@@ -110,24 +111,24 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
     @Override
     public boolean execute() {
         GraphController graphController = Lookup.getDefault().lookup(GraphController.class);
-        graphModel = graphController.getGraphModel(workspace);
-        Graph graph = null;
-        if (exportVisible) {
-            graph = graphModel.getGraphVisible();
-        } else {
-            graph = graphModel.getGraph();
-        }
+        GraphModel graphModel = graphController.getGraphModel(workspace);
+        Graph graph = exportVisible ? graphModel.getGraphVisible() : graphModel.getGraph();
+
+        graph.readLock();
+
         try {
-            exportData(createDocument(), graph, attributeModel);
+            exportData(createDocument(), graph);
         } catch (Exception e) {
-            graph.readUnlockAll();
-            throw new RuntimeException(e);
+            Logger.getLogger(ExporterGraphML.class.getName()).log(Level.SEVERE, null, e);
+        } finally {
+            graph.readUnlock();
+            Progress.finish(progressTicket);
         }
 
         return !cancel;
     }
 
-    public Document createDocument() throws ParserConfigurationException {
+    private Document createDocument() throws ParserConfigurationException {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder documentBuilder = factory.newDocumentBuilder();
         final Document document = documentBuilder.newDocument();
@@ -158,10 +159,8 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
      return null;
      }
      */
-    public boolean exportData(Document document, Graph graph, AttributeModel model) throws Exception {
+    private void exportData(Document document, Graph graph) throws Exception {
         Progress.start(progressTicket);
-
-        graph.readLock();
 
         //Options
         calculateMinMax(graph);
@@ -174,22 +173,19 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         Element root = document.createElementNS("http://graphml.graphdrawing.org/xmlns", "graphml");
         document.appendChild(root);
 
-        createKeys(document, root);
+        createKeys(document, root, graph.getModel());
 
         Element graphE = createGraph(document, graph);
         root.appendChild(graphE);
-
-        graph.readUnlockAll();
 
         if (!cancel) {
             transform(document);
         }
 
         Progress.finish(progressTicket);
-        return !cancel;
     }
 
-    private void createKeys(Document document, Element root) {
+    private void createKeys(Document document, Element root, GraphModel graphModel) {
         Element nodeLabelKeyE = document.createElement("key");
         nodeLabelKeyE.setAttribute("id", "label");
         nodeLabelKeyE.setAttribute("attr.name", "label");
@@ -276,9 +272,9 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         }
 
         //Attributes
-        if (attributeModel != null && exportAttributes) {
+        if (graphModel != null && exportAttributes) {
             //Node attributes
-            for (Column column : attributeModel.getNodeTable()) {
+            for (Column column : graphModel.getNodeTable()) {
                 if (!column.isProperty()) {
                     Element attributeE = createAttribute(document, column);
                     attributeE.setAttribute("for", "node");
@@ -286,9 +282,8 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
                 }
             }
 
-            for (Column column : attributeModel.getEdgeTable()) {
+            for (Column column : graphModel.getEdgeTable()) {
                 if (!column.isProperty()) {
-                    //Data or computed
                     Element attributeE = createAttribute(document, column);
                     attributeE.setAttribute("for", "edge");
                     root.appendChild(attributeE);
@@ -300,7 +295,7 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
     private Element createGraph(Document document, Graph graph) throws Exception {
         Element graphE = document.createElement("graph");
 
-        if (graphModel.isDirected() || graphModel.isMixed()) {
+        if (graph.isDirected() || graph.isMixed()) {
             graphE.setAttribute("edgedefault", "directed");
         } else {
             graphE.setAttribute("edgedefault", "undirected"); // defaultValue
@@ -363,9 +358,10 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
     }
 
     private void createNodes(Document document, Element parentE, Graph graph) throws Exception {
-        // there is no tree
-        for (Node n : graph.getNodes()) {
+        NodeIterable nodeIterable = graph.getNodes();
+        for (Node n : nodeIterable) {
             if (cancel) {
+                nodeIterable.doBreak();
                 break;
             }
             Element nodeE = createNode(document, graph, n);
@@ -384,8 +380,8 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         }
 
         //Attribute values
-        if (attributeModel != null && exportAttributes) {
-            for (Column column : attributeModel.getNodeTable()) {
+        if (exportAttributes) {
+            for (Column column : n.getAttributeColumns()) {
                 if (!column.isProperty()) {
                     //Data or computed
                     Element attvalueE = createNodeAttvalue(document, column, graph, n);
@@ -428,8 +424,10 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
     }
 
     private void createEdges(Document document, Element edgesE, Graph graph) throws Exception {
-        for (Edge e : graph.getEdges()) {
+        EdgeIterable itr = graph.getEdges();
+        for (Edge e : itr) {
             if (cancel) {
+                itr.doBreak();
                 break;
             }
             Element edgeE = createEdge(document, e, graph);
@@ -457,15 +455,15 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         Element weightE = createEdgeWeight(document, e, graph);
         edgeE.appendChild(weightE);
 
-        if (e.isDirected() && !graphModel.isDirected()) {
+        if (e.isDirected() && !graph.isDirected()) {
             edgeE.setAttribute("type", "directed");
-        } else if (!e.isDirected() && graphModel.isDirected()) {
+        } else if (!e.isDirected() && graph.isDirected()) {
             edgeE.setAttribute("type", "undirected");
         }
 
         //Attribute values
-        if (attributeModel != null) {
-            for (Column column : attributeModel.getEdgeTable()) {
+        if (exportAttributes) {
+            for (Column column : e.getAttributeColumns()) {
                 if (!column.isProperty()) {
                     //Data or computed
                     Element attvalueE = createEdgeAttvalue(document, column, graph, e);
@@ -475,6 +473,7 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
                 }
             }
         }
+
         Progress.progress(progressTicket);
 
         return edgeE;

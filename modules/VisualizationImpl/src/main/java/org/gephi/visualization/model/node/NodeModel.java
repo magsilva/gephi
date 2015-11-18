@@ -57,10 +57,7 @@ import org.gephi.visualization.octree.Octant;
 public abstract class NodeModel implements Model, TextModel {
 
     protected final Node node;
-    protected float viewportX;
-    protected float viewportY;
     protected float cameraDistance;
-    protected float viewportRadius;
     protected float[] dragDistance;
     //Octant
     protected Octant octant;
@@ -70,12 +67,9 @@ public abstract class NodeModel implements Model, TextModel {
     protected boolean highlight;
     public int markTime;
     public boolean mark;
-    //Text
-    protected Rectangle2D bounds;
     //Edges
     protected EdgeModel[] edges;
     protected int edgeLength;
-    protected int edgeCount;
 
     public NodeModel(Node node) {
         this.node = node;
@@ -133,28 +127,12 @@ public abstract class NodeModel implements Model, TextModel {
         return cameraDistance;
     }
 
-    public float getViewportRadius() {
-        return viewportRadius;
+    public float getX() {
+        return node.x();
     }
 
-    public void setViewportRadius(float viewportRadius) {
-        this.viewportRadius = viewportRadius;
-    }
-
-    public float getViewportX() {
-        return viewportX;
-    }
-
-    public void setViewportX(float viewportX) {
-        this.viewportX = viewportX;
-    }
-
-    public float getViewportY() {
-        return viewportY;
-    }
-
-    public void setViewportY(float viewportY) {
-        this.viewportY = viewportY;
+    public float getY() {
+        return node.y();
     }
 
     public void setSelected(boolean selected) {
@@ -197,34 +175,17 @@ public abstract class NodeModel implements Model, TextModel {
 
     @Override
     public float getTextWidth() {
-        Rectangle2D rec = bounds;
-        if (rec != null) {
-            return (float) rec.getWidth();
-        }
-        return 0f;
+        return node.getTextProperties().getWidth();
     }
 
     @Override
     public float getTextHeight() {
-        Rectangle2D rec = bounds;
-        if (rec != null) {
-            return (float) rec.getHeight();
-        }
-        return 0f;
-    }
-
-    @Override
-    public void setTextBounds(Rectangle2D bounds) {
-        this.bounds = bounds;
+        return node.getTextProperties().getWidth();
     }
 
     @Override
     public String getText() {
-        String t = node.getTextProperties().getText();
-        if (t == null) {
-            return node.getLabel();
-        }
-        return t;
+        return node.getTextProperties().getText();
     }
 
     @Override
@@ -262,11 +223,14 @@ public abstract class NodeModel implements Model, TextModel {
         return node;
     }
 
+    public float[] getDragDistanceFromMouse() {
+        return dragDistance;
+    }
+
     public void addEdge(EdgeModel model) {
         int id = edgeLength++;
         growEdges(id);
         edges[id] = model;
-        edgeCount++;
         if (model.getSourceModel() == this) {
             model.setOctantSourceId(id);
         } else {
@@ -282,7 +246,6 @@ public abstract class NodeModel implements Model, TextModel {
             id = model.getOctantTargetId();
         }
         edges[id] = null;
-        edgeCount--;
     }
 
     public EdgeModel[] getEdges() {

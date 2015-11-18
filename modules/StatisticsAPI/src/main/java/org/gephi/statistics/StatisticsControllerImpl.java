@@ -42,9 +42,6 @@ Portions Copyrighted 2011 Gephi Consortium.
  */
 package org.gephi.statistics;
 
-import org.gephi.attribute.api.AttributeModel;
-import org.gephi.attribute.api.TimestampIndex;
-import org.gephi.attribute.time.Interval;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.statistics.spi.StatisticsBuilder;
@@ -53,7 +50,9 @@ import org.gephi.statistics.api.*;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.GraphView;
+import org.gephi.graph.api.Interval;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.TimeIndex;
 import org.gephi.project.api.ProjectController;
 import org.gephi.utils.longtask.spi.LongTask;
 import org.gephi.utils.longtask.api.LongTaskExecutor;
@@ -86,7 +85,9 @@ public class StatisticsControllerImpl implements StatisticsController {
 
             @Override
             public void initialize(Workspace workspace) {
-                workspace.add(new StatisticsModelImpl());
+                if (workspace.getLookup().lookup(StatisticsModelImpl.class) == null) {
+                    workspace.add(new StatisticsModelImpl());
+                }
             }
 
             @Override
@@ -157,8 +158,7 @@ public class StatisticsControllerImpl implements StatisticsController {
         } else {
             GraphController graphController = Lookup.getDefault().lookup(GraphController.class);
             GraphModel graphModel = graphController.getGraphModel();
-            AttributeModel attributeModel = graphController.getAttributeModel();
-            statistics.execute(graphModel, attributeModel);
+            statistics.execute(graphModel);
             model.addReport(statistics);
         }
     }
@@ -166,7 +166,6 @@ public class StatisticsControllerImpl implements StatisticsController {
     private void executeDynamic(DynamicStatistics statistics, DynamicLongTask dynamicLongTask) {
         GraphController graphController = Lookup.getDefault().lookup(GraphController.class);
         GraphModel graphModel = graphController.getGraphModel();
-        AttributeModel attributeModel = graphController.getAttributeModel();
 
         double window = statistics.getWindow();
         double tick = statistics.getTick();
@@ -183,30 +182,27 @@ public class StatisticsControllerImpl implements StatisticsController {
         }
 
         //Init
-        statistics.execute(graphModel, attributeModel);
+        statistics.execute(graphModel);
 
         //Loop
         for (double low = bounds.getLow(); low <= bounds.getHigh() - window; low += tick) {
             double high = low + window;
 
 //            Graph g = dynamicGraph.getSnapshotGraph(low, high);
-            
-            
             GraphView currentView = graphModel.getVisibleView();
             Graph graph = graphModel.getGraphVisible();
             GraphView view = graphModel.createView();
             Graph g = graphModel.getGraph(view);
-            
-            TimestampIndex<Node> nodeIndex = graphModel.getNodeTimestampIndex(currentView);
-            for(Node node : nodeIndex.get(low, high)) {
+
+            TimeIndex<Node> nodeIndex = graphModel.getNodeTimeIndex(currentView);
+            for (Node node : nodeIndex.get(new Interval(low, high))) {
                 g.addNode(node);
             }
-            
-            TimestampIndex<Edge> edgeIndex = graphModel.getEdgeTimestampIndex(currentView);
-            for(Edge edge : edgeIndex.get(low, high)) {
+
+            TimeIndex<Edge> edgeIndex = graphModel.getEdgeTimeIndex(currentView);
+            for (Edge edge : edgeIndex.get(new Interval(low, high))) {
                 g.addEdge(edge);
             }
-            
 
             statistics.loop(g.getView(), new Interval(low, high));
 

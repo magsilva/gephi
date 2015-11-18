@@ -96,13 +96,14 @@ public class ImporterGraphML implements FileImporter, LongTask {
     //Architecture
     private Reader reader;
     private ContainerLoader container;
+    private EdgeDirection edgeDefault;
     private boolean cancel;
     private Report report;
     private ProgressTicket progress;
     private XMLStreamReader xmlReader;
-    private PropertiesAssociations properties = new PropertiesAssociations();
-    private HashMap<String, NodeProperties> nodePropertiesAttributes = new HashMap<String, NodeProperties>();
-    private HashMap<String, EdgeProperties> edgePropertiesAttributes = new HashMap<String, EdgeProperties>();
+    private final PropertiesAssociations properties = new PropertiesAssociations();
+    private final HashMap<String, NodeProperties> nodePropertiesAttributes = new HashMap<String, NodeProperties>();
+    private final HashMap<String, EdgeProperties> edgePropertiesAttributes = new HashMap<String, EdgeProperties>();
 
     public ImporterGraphML() {
         //Default node associations
@@ -117,6 +118,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         properties.addNodePropertyAssociation(NodeProperties.R, "r");
         properties.addNodePropertyAssociation(NodeProperties.G, "g");
         properties.addNodePropertyAssociation(NodeProperties.B, "b");
+        properties.addNodePropertyAssociation(NodeProperties.COLOR, "color");
 
         //Default edge associations
         properties.addEdgePropertyAssociation(EdgeProperties.LABEL, "label");
@@ -129,6 +131,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         properties.addEdgePropertyAssociation(EdgeProperties.R, "r");
         properties.addEdgePropertyAssociation(EdgeProperties.G, "g");
         properties.addEdgePropertyAssociation(EdgeProperties.B, "b");
+        properties.addEdgePropertyAssociation(EdgeProperties.COLOR, "color");
     }
 
     @Override
@@ -171,13 +174,16 @@ public class ImporterGraphML implements FileImporter, LongTask {
                     }
                 }
             }
-            xmlReader.close();
-
         } catch (Exception e) {
             if (e instanceof RuntimeException) {
                 throw (RuntimeException) e;
             }
             throw new RuntimeException(e);
+        } finally {
+            try {
+                xmlReader.close();
+            } catch (XMLStreamException e) {
+            }
         }
         Progress.finish(progress);
         return !cancel;
@@ -198,11 +204,17 @@ public class ImporterGraphML implements FileImporter, LongTask {
         }
 
         //Edge Type
+        // Container edge type should NOT be set to default edge type, as this is 
+        // not what it really means. Mixed is the appropriate type, as GraphML supports
+        // mixed edge types. 
+        container.setEdgeDefault(EdgeDirectionDefault.MIXED);
+        edgeDefault = EdgeDirection.DIRECTED;
+
         if (!defaultEdgeType.isEmpty()) {
             if (defaultEdgeType.equalsIgnoreCase("undirected")) {
-                container.setEdgeDefault(EdgeDirectionDefault.UNDIRECTED);
+                edgeDefault = EdgeDirection.UNDIRECTED;
             } else if (defaultEdgeType.equalsIgnoreCase("directed")) {
-                container.setEdgeDefault(EdgeDirectionDefault.DIRECTED);
+                edgeDefault = EdgeDirection.DIRECTED;
             } else {
                 report.logIssue(new Issue(NbBundle.getMessage(ImporterGraphML.class, "importerGraphML_error_defaultedgetype", defaultEdgeType), Issue.Level.SEVERE));
             }
@@ -233,7 +245,6 @@ public class ImporterGraphML implements FileImporter, LongTask {
         }
 
         //TODO - PARENT REL
-
         if (!container.nodeExists(id)) {
             container.addNode(node);
         }
@@ -316,6 +327,9 @@ public class ImporterGraphML implements FileImporter, LongTask {
                         case LABEL:
                             node.setLabel(value);
                             break;
+                        case COLOR:
+                            node.setColor(value);
+                            break;
                         case R:
                             if (node.getColor() == null) {
                                 node.setColor(Integer.parseInt(value), 0, 0);
@@ -397,10 +411,11 @@ public class ImporterGraphML implements FileImporter, LongTask {
                 edge.setType(EdgeDirection.UNDIRECTED);
             } else {
                 report.logIssue(new Issue(NbBundle.getMessage(ImporterGraphML.class, "importerGraphML_error_edgetype", directed, edge), Issue.Level.SEVERE));
+                edge.setType(edgeDefault);
             }
+        } else {
+            edge.setType(edgeDefault);
         }
-
-
 
         boolean end = false;
         while (reader.hasNext() && !end) {
@@ -468,6 +483,9 @@ public class ImporterGraphML implements FileImporter, LongTask {
                         case LABEL:
                             edge.setLabel(value);
                             break;
+                        case COLOR:
+                            edge.setColor(value);
+                            break;
                         case R:
                             if (edge.getColor() == null) {
                                 edge.setColor(Integer.parseInt(value), 0, 0);
@@ -513,7 +531,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         String type = "";
         String title = "";
         String defaultStr = "";
-        String forStr = "";
+        String forStr = "all";
         for (int i = 0; i < reader.getAttributeCount(); i++) {
             String attName = reader.getAttributeName(i).getLocalPart();
             if (ATTRIBUTE_ID.equalsIgnoreCase(attName)) {

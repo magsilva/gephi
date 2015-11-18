@@ -41,14 +41,23 @@
  */
 package org.gephi.visualization;
 
-import javax.media.opengl.GLProfile;
+import com.jogamp.opengl.GLProfile;
 import org.openide.modules.ModuleInstall;
 
 public class Installer extends ModuleInstall {
 
     @Override
     public void restored() {
+        // Disable JOGL's default icons
+        System.setProperty("newt.window.icons", "null,null");
+
         //Init JOGL, recommended
         GLProfile.initSingleton();
+    }
+
+    @Override
+    public void close() {
+        // Destroy JOGL
+        VizController.getInstance().destroy();
     }
 }

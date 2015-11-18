@@ -7,27 +7,23 @@ import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import javax.media.opengl.GL2;
-import javax.media.opengl.glu.GLU;
+import com.jogamp.opengl.GL2;
+import com.jogamp.opengl.glu.GLU;
 import org.gephi.graph.api.Node;
 import org.gephi.lib.gleem.linalg.Vec3f;
 import org.gephi.visualization.GraphLimits;
 import org.gephi.visualization.VizController;
+import org.gephi.visualization.apiimpl.GraphDrawable;
 import org.gephi.visualization.model.edge.EdgeModel;
 import org.gephi.visualization.model.node.NodeModel;
-import org.gephi.visualization.swing.GraphDrawableImpl;
 
-/**
- *
- * @author mbastian
- */
 public class Octree {
 
     //Const
     protected static final int NULL_ID = -1;
     //Architecture
     protected GraphLimits limits;
-    private GraphDrawableImpl drawable;
+    private GraphDrawable drawable;
     protected VizController vizController;
     //Params
     protected final int maxDepth;
@@ -263,71 +259,12 @@ public class Octree {
             }
         }
 
-        int viewportMinX = Integer.MAX_VALUE;
-        int viewportMaxX = Integer.MIN_VALUE;
-        int viewportMinY = Integer.MAX_VALUE;
-        int viewportMaxY = Integer.MIN_VALUE;
-        float[] point;
-
-        point = drawable.myGluProject(minX, minY, minZ);        //bottom far left
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(minX, minY, maxZ);        //bottom near left
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(minX, maxY, maxZ);        //up near left
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(maxX, minY, maxZ);        //bottom near right
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(maxX, minY, minZ);        //bottom far right
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(maxX, maxY, minZ);        //up far right
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(maxX, maxY, maxZ);        //up near right
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
-        point = drawable.myGluProject(minX, maxY, minZ);        //up far left
-        viewportMinX = Math.min(viewportMinX, (int) point[0]);
-        viewportMinY = Math.min(viewportMinY, (int) point[1]);
-        viewportMaxX = Math.max(viewportMaxX, (int) point[0]);
-        viewportMaxY = Math.max(viewportMaxY, (int) point[1]);
-
         limits.setMinXoctree(minX);
         limits.setMaxXoctree(maxX);
         limits.setMinYoctree(minY);
         limits.setMaxYoctree(maxY);
         limits.setMinZoctree(minZ);
         limits.setMaxZoctree(maxZ);
-
-        limits.setMinXviewport(viewportMinX);
-        limits.setMaxXviewport(viewportMaxX);
-        limits.setMinYviewport(viewportMinY);
-        limits.setMaxYviewport(viewportMaxY);
     }
 
     public void updateVisibleOctant(GL2 gl) {
@@ -353,10 +290,6 @@ public class Octree {
             }
             visibleLeaves = 0;
             int nbRecords = gl.glRenderMode(GL2.GL_RENDER);
-            if (vizController.getVizModel().isCulling()) {
-                gl.glEnable(GL2.GL_CULL_FACE);
-                gl.glCullFace(GL2.GL_BACK);
-            }
 
             //Get the hits and add the nodes' objects to the array
             int depth = Integer.MAX_VALUE;
@@ -404,11 +337,11 @@ public class Octree {
             gl.glMatrixMode(GL2.GL_MODELVIEW);
 
             //Draw the nodes' cube int the select buffer
-            List<Octant> visibleLeaves = new ArrayList<Octant>();
+            List<Octant> visibleLeavesList = new ArrayList<Octant>();
             for (Octant n : leaves) {
                 if (n != null && n.visible) {
-                    int i = visibleLeaves.size() + 1;
-                    visibleLeaves.add(n);
+                    int i = visibleLeavesList.size() + 1;
+                    visibleLeavesList.add(n);
                     gl.glLoadName(i);
                     n.displayOctant(gl);
                 }
@@ -422,10 +355,6 @@ public class Octree {
 
             //Returning to normal rendering mode
             int nbRecords = gl.glRenderMode(GL2.GL_RENDER);
-            if (vizController.getVizModel().isCulling()) {
-                gl.glEnable(GL2.GL_CULL_FACE);
-                gl.glCullFace(GL2.GL_BACK);
-            }
 
             //Clean previous selection
             selectedLeaves.clear();
@@ -434,7 +363,7 @@ public class Octree {
             for (int i = 0; i < nbRecords; i++) {
                 int hit = hitsBuffer.get(i * 4 + 3) - 1; 		//-1 Because of the glPushName(0)
 
-                Octant nodeHit = visibleLeaves.get(hit);
+                Octant nodeHit = visibleLeavesList.get(hit);
                 selectedLeaves.add(nodeHit);
             }
         }
@@ -452,11 +381,6 @@ public class Octree {
         }
         if (!vizController.getVizConfig().isWireFrame()) {
             gl.glPolygonMode(GL2.GL_FRONT_AND_BACK, GL2.GL_FILL);
-        }
-
-        if (vizController.getVizModel().isCulling()) {
-            gl.glEnable(GL2.GL_CULL_FACE);
-            gl.glCullFace(GL2.GL_BACK);
         }
     }
 

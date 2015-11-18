@@ -41,15 +41,18 @@ Portions Copyrighted 2011 Gephi Consortium.
  */
 package org.gephi.datalab.plugin.manipulators.nodes;
 
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.Icon;
-import org.gephi.data.attributes.api.AttributeColumn;
-import org.gephi.data.attributes.api.AttributeController;
+import org.gephi.graph.api.Column;
 import org.gephi.datalab.api.GraphElementsController;
 import org.gephi.datalab.api.datatables.DataTablesController;
 import org.gephi.datalab.plugin.manipulators.nodes.ui.MergeNodesUI;
 import org.gephi.datalab.spi.ManipulatorUI;
 import org.gephi.datalab.spi.rows.merge.AttributeRowsMergeStrategy;
+import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.Table;
 import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -66,56 +69,75 @@ import org.openide.util.NbPreferences;
  * <li></li>
  * </ul>
  * </p>
- * @author Eduardo Ramos <eduramiba@gmail.com>
+ * @author Eduardo Ramos
  */
 public class MergeNodes extends BasicNodesManipulator {
 
     public static final String DELETE_MERGED_NODES_SAVED_PREFERENCES = "MergeNodes_DeleteMergedNodes";
     private Node[] nodes;
     private Node selectedNode;
-    private AttributeColumn[] columns;
+    private Column[] columns;
     private AttributeRowsMergeStrategy[] mergeStrategies;
     private boolean deleteMergedNodes;
 
+    @Override
     public void setup(Node[] nodes, Node clickedNode) {
         this.nodes = nodes;
         selectedNode = clickedNode != null ? clickedNode : nodes[0];
-        columns = Lookup.getDefault().lookup(AttributeController.class).getModel().getNodeTable().getColumns();
+        
+        Table nodeTable = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
+        List<Column> columnsList = new ArrayList<Column>();
+        for (Column column : nodeTable) {
+            if(!column.isReadOnly()){
+                columnsList.add(column);
+            }
+        }
+        
+        columns = columnsList.toArray(new Column[0]);
+        
         mergeStrategies = new AttributeRowsMergeStrategy[columns.length];
         deleteMergedNodes = NbPreferences.forModule(MergeNodes.class).getBoolean(DELETE_MERGED_NODES_SAVED_PREFERENCES, true);
     }
 
+    @Override
     public void execute() {
         GraphElementsController gec = Lookup.getDefault().lookup(GraphElementsController.class);
-        Node newNode=gec.mergeNodes(nodes, selectedNode, mergeStrategies, deleteMergedNodes);
+        Node newNode = gec.mergeNodes(nodes, selectedNode, columns, mergeStrategies, deleteMergedNodes);
         Lookup.getDefault().lookup(DataTablesController.class).setNodeTableSelection(new Node[]{newNode});
         NbPreferences.forModule(MergeNodes.class).putBoolean(DELETE_MERGED_NODES_SAVED_PREFERENCES, deleteMergedNodes);
     }
 
+    @Override
     public String getName() {
         return NbBundle.getMessage(MergeNodes.class, "MergeNodes.name");
     }
 
+    @Override
     public String getDescription() {
         return NbBundle.getMessage(MergeNodes.class, "MergeNodes.description");
     }
 
+    @Override
     public boolean canExecute() {
         return nodes.length > 1;
     }
 
+    @Override
     public ManipulatorUI getUI() {
         return new MergeNodesUI();
     }
 
+    @Override
     public int getType() {
         return 500;
     }
 
+    @Override
     public int getPosition() {
         return 0;
     }
 
+    @Override
     public Icon getIcon() {
         return ImageUtilities.loadImageIcon("org/gephi/datalab/plugin/manipulators/resources/merge.png", true);
     }
@@ -140,7 +162,7 @@ public class MergeNodes extends BasicNodesManipulator {
         this.selectedNode = selectedNode;
     }
 
-    public AttributeColumn[] getColumns() {
+    public Column[] getColumns() {
         return columns;
     }
 

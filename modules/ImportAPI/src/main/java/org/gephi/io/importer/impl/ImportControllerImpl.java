@@ -48,7 +48,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.util.ArrayList;
 import org.gephi.io.importer.api.Container;
-import org.gephi.io.importer.api.ContainerFactory;
+import org.gephi.io.importer.api.ContainerUnloader;
 import org.gephi.io.importer.api.Database;
 import org.gephi.io.importer.api.FileType;
 import org.gephi.io.importer.api.ImportController;
@@ -108,13 +108,6 @@ public class ImportControllerImpl implements ImportController {
         FileImporterBuilder builder = getMatchingImporter(fileObject);
         if (fileObject != null && builder != null) {
             FileImporter fi = builder.buildImporter();
-            if (fileObject.getPath().startsWith(System.getProperty("java.io.tmpdir"))) {
-                try {
-                    fileObject.delete();
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
-                }
-            }
             return fi;
         }
         return null;
@@ -137,13 +130,6 @@ public class ImportControllerImpl implements ImportController {
             FileImporterBuilder builder = getMatchingImporter(fileObject);
             if (fileObject != null && builder != null) {
                 Container c = importFile(fileObject.getInputStream(), builder.buildImporter());
-                if (fileObject.getPath().startsWith(System.getProperty("java.io.tmpdir"))) {
-                    try {
-                        fileObject.delete();
-                    } catch (IOException ex) {
-                        Exceptions.printStackTrace(ex);
-                    }
-                }
                 return c;
             }
         }
@@ -157,13 +143,6 @@ public class ImportControllerImpl implements ImportController {
             fileObject = getArchivedFile(fileObject);   //Unzip and return content file
             if (fileObject != null) {
                 Container c = importFile(fileObject.getInputStream(), importer);
-                if (fileObject.getPath().startsWith(System.getProperty("java.io.tmpdir"))) {
-                    try {
-                        fileObject.delete();
-                    } catch (IOException ex) {
-                        Exceptions.printStackTrace(ex);
-                    }
-                }
                 return c;
             }
         }
@@ -173,7 +152,7 @@ public class ImportControllerImpl implements ImportController {
     @Override
     public Container importFile(Reader reader, FileImporter importer) {
         //Create Container
-        final Container container = Lookup.getDefault().lookup(ContainerFactory.class).newContainer();
+        final Container container = Lookup.getDefault().lookup(Container.Factory.class).newContainer();
 
         //Report
         Report report = new Report();
@@ -183,15 +162,22 @@ public class ImportControllerImpl implements ImportController {
 
         try {
             if (importer.execute(container.getLoader())) {
-                if (importer.getReport() != null) {
+                if (importer.getReport() != null && importer.getReport() != report) {
                     report.append(importer.getReport());
                 }
+                report.close();
                 return container;
             }
         } catch (RuntimeException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new RuntimeException(ex);
+        } finally {
+            try {
+                reader.close();
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
         }
         return null;
     }
@@ -203,13 +189,19 @@ public class ImportControllerImpl implements ImportController {
             return importFile(reader, importer);
         } catch (Exception ex) {
             throw new RuntimeException(ex);
+        } finally {
+            try {
+                stream.close();
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
         }
     }
 
     @Override
     public Container importDatabase(Database database, DatabaseImporter importer) {
         //Create Container
-        final Container container = Lookup.getDefault().lookup(ContainerFactory.class).newContainer();
+        final Container container = Lookup.getDefault().lookup(Container.Factory.class).newContainer();
 
         //Report
         Report report = new Report();
@@ -222,6 +214,7 @@ public class ImportControllerImpl implements ImportController {
                 if (importer.getReport() != null) {
                     report.append(importer.getReport());
                 }
+                report.close();
                 return container;
             }
         } catch (RuntimeException ex) {
@@ -235,7 +228,7 @@ public class ImportControllerImpl implements ImportController {
     @Override
     public Container importSpigot(SpigotImporter importer) {
         //Create Container
-        final Container container = Lookup.getDefault().lookup(ContainerFactory.class).newContainer();
+        final Container container = Lookup.getDefault().lookup(Container.Factory.class).newContainer();
 
         //Report
         Report report = new Report();
@@ -246,6 +239,7 @@ public class ImportControllerImpl implements ImportController {
                 if (importer.getReport() != null) {
                     report.append(importer.getReport());
                 }
+                report.close();
                 return container;
             }
         } catch (RuntimeException ex) {
@@ -274,7 +268,26 @@ public class ImportControllerImpl implements ImportController {
                 scaler.doScale(container);
             }
         }
-        processor.setContainer(container.getUnloader());
+        processor.setContainers(new ContainerUnloader[]{container.getUnloader()});
+        processor.setWorkspace(workspace);
+        processor.process();
+    }
+
+    @Override
+    public void process(Container[] containers, Processor processor, Workspace workspace) {
+        ContainerUnloader[] unloaders = new ContainerUnloader[containers.length];
+        int i = 0;
+        for (Container container : containers) {
+            container.closeLoader();
+            if (container.getUnloader().isAutoScale()) {
+                Scaler scaler = Lookup.getDefault().lookup(Scaler.class);
+                if (scaler != null) {
+                    scaler.doScale(container);
+                }
+            }
+            unloaders[i++] = container.getUnloader();
+        }
+        processor.setContainers(unloaders);
         processor.setWorkspace(workspace);
         processor.process();
     }
@@ -345,9 +358,15 @@ public class ImportControllerImpl implements ImportController {
     }
 
     private FileImporterBuilder getMatchingImporter(String extension) {
+        if (extension.startsWith(".")) {
+            extension = extension.substring(1);
+        }
         for (FileImporterBuilder im : fileImporterBuilders) {
             for (FileType ft : im.getFileTypes()) {
                 for (String ext : ft.getExtensions()) {
+                    if (ext.startsWith(".")) {
+                        ext = ext.substring(1);
+                    }
                     if (ext.equalsIgnoreCase(extension)) {
                         return im;
                     }

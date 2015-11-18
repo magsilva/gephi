@@ -56,7 +56,7 @@ import org.openide.util.Lookup;
 /**
  * UI for AddEdgeToGraph GeneralActionsManipulator
  *
- * @author Eduardo Ramos <eduramiba@gmail.com>
+ * @author Eduardo Ramos
  */
 public class AddEdgeToGraphUI extends javax.swing.JPanel implements ManipulatorUI {
 
@@ -72,6 +72,7 @@ public class AddEdgeToGraphUI extends javax.swing.JPanel implements ManipulatorU
         initComponents();
     }
 
+    @Override
     public void setup(Manipulator m, DialogControls dialogControls) {
         this.manipulator = (AddEdgeToGraph) m;
         this.dialogControls = dialogControls;
@@ -81,11 +82,11 @@ public class AddEdgeToGraphUI extends javax.swing.JPanel implements ManipulatorU
             undirectedRadioButton.setSelected(true);
         }
         
-        graph = Lookup.getDefault().lookup(GraphController.class).getModel().getMixedGraph();
+        graph = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getGraph();
         nodes = graph.getNodes().toArray();
         
         for (Node n : nodes) {
-            sourceNodesComboBox.addItem(n.getId() + " - " + n.getNodeData().getLabel());
+            sourceNodesComboBox.addItem(n.getId() + " - " + n.getLabel());
         }
         
         Node selectedSource = manipulator.getSource();
@@ -100,6 +101,7 @@ public class AddEdgeToGraphUI extends javax.swing.JPanel implements ManipulatorU
         refreshAvailableTargetNodes();
     }
 
+    @Override
     public void unSetup() {
         manipulator.setDirected(directedRadioButton.isSelected());
         if (targetNodesComboBox.getSelectedIndex() != -1) {
@@ -108,39 +110,37 @@ public class AddEdgeToGraphUI extends javax.swing.JPanel implements ManipulatorU
         }
     }
 
+    @Override
     public String getDisplayName() {
         return manipulator.getName();
     }
 
+    @Override
     public JPanel getSettingsPanel() {
         return this;
     }
 
+    @Override
     public boolean isModal() {
         return true;
     }
 
-    private boolean canCreateEdge(Graph graph, Node source, Node target, boolean createUndirected) {
+    private boolean canCreateEdge(Graph graph, Node source, Node target) {
         Edge existingEdge = graph.getEdge(source, target);
 
         if (existingEdge == null) {
-            return true;
+            existingEdge = graph.getEdge(target, source);
         }
-
-        if (existingEdge.getSource() == source) {//Exact edge found
-            return false;
-        } else {//Inverse edge found
-            return !createUndirected && existingEdge.isDirected();
-        }
+        
+        return existingEdge == null;//Edge or inverse edge found
     }
 
     private void refreshAvailableTargetNodes() {
         if (nodes != null) {
             ArrayList<Node> availableTargetNodes = new ArrayList<Node>();
             Node sourceNode = nodes[sourceNodesComboBox.getSelectedIndex()];
-            boolean createUndirected = undirectedRadioButton.isSelected();
             for (Node n : nodes) {
-                if (canCreateEdge(graph, sourceNode, n, createUndirected)) {
+                if (canCreateEdge(graph, sourceNode, n)) {
                     availableTargetNodes.add(n);
                 }
             }
@@ -149,7 +149,7 @@ public class AddEdgeToGraphUI extends javax.swing.JPanel implements ManipulatorU
             dialogControls.setOkButtonEnabled(!availableTargetNodes.isEmpty());
             targetNodesComboBox.removeAllItems();
             for (Node n : targetNodes) {
-                targetNodesComboBox.addItem(n.getId() + " - " + n.getNodeData().getLabel());
+                targetNodesComboBox.addItem(n.getId() + " - " + n.getLabel());
             }
         }
     }

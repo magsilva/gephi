@@ -41,16 +41,12 @@
  */
 package org.gephi.visualization.model.node;
 
-import javax.media.opengl.GL2;
-import javax.media.opengl.glu.GLU;
+import com.jogamp.opengl.GL2;
+import com.jogamp.opengl.glu.GLU;
 import org.gephi.graph.api.Node;
 import org.gephi.lib.gleem.linalg.Vecf;
 import org.gephi.visualization.VizModel;
 
-/**
- *
- * @author Mathieu Bastian
- */
 public class NodeDiskModel extends NodeModel {
 
     public int modelType;
@@ -74,7 +70,7 @@ public class NodeDiskModel extends NodeModel {
         gl.glPushMatrix();
         float size = node.size() * 2;
         gl.glTranslatef(node.x(), node.y(), node.z());
-        gl.glScalef(size, size, size);
+        gl.glScalef(size, size, 1f);
 
         if (!selec) {
             if (vizModel.getConfig().isLightenNonSelected()) {
@@ -147,10 +143,7 @@ public class NodeDiskModel extends NodeModel {
 
     @Override
     public boolean selectionTest(Vecf distanceFromMouse, float selectionSize) {
-        if (distanceFromMouse.get(2) - selectionSize < getViewportRadius()) {
-            return true;
-        }
-        return false;
+        return distanceFromMouse.get(2) - selectionSize < node.size();
     }
 
     @Override

@@ -41,6 +41,7 @@
  */
 package org.gephi.io.importer.plugin.file;
 
+import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.Reader;
 import java.util.ArrayList;
@@ -48,14 +49,17 @@ import java.util.List;
 import org.gephi.io.importer.api.ContainerLoader;
 import org.gephi.io.importer.api.EdgeDraft;
 import org.gephi.io.importer.api.ImportUtils;
+import org.gephi.io.importer.api.Issue;
 import org.gephi.io.importer.api.NodeDraft;
 import org.gephi.io.importer.api.Report;
 import org.gephi.io.importer.spi.FileImporter;
 import org.gephi.utils.longtask.spi.LongTask;
 import org.gephi.utils.progress.Progress;
 import org.gephi.utils.progress.ProgressTicket;
+import org.openide.util.NbBundle;
 
 /**
+ * Trivial Graph Format importer.
  *
  * @author rlfnb
  */
@@ -68,6 +72,7 @@ public class ImporterTGF implements FileImporter, LongTask {
     private ProgressTicket progressTicket;
     private boolean cancel = false;
 
+    @Override
     public boolean execute(ContainerLoader container) {
         this.container = container;
         this.report = new Report();
@@ -76,6 +81,11 @@ public class ImporterTGF implements FileImporter, LongTask {
             importData(lineReader);
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            try {
+                lineReader.close();
+            } catch (IOException ex) {
+            }
         }
         return !cancel;
     }
@@ -90,13 +100,11 @@ public class ImporterTGF implements FileImporter, LongTask {
             String line = reader.readLine().trim();
             if ("#".equalsIgnoreCase(line)) {
                 isNode = false;
-            } else {
-                if (line != null && !line.isEmpty()) {
-                    if (isNode) {
-                        nodes.add(line);
-                    } else {
-                        edges.add(line);
-                    }
+            } else if (line != null && !line.isEmpty()) {
+                if (isNode) {
+                    nodes.add(line);
+                } else {
+                    edges.add(line);
                 }
             }
         }
@@ -104,7 +112,7 @@ public class ImporterTGF implements FileImporter, LongTask {
         Progress.switchToDeterminate(progressTicket, nodes.size() + edges.size());
 
         if (nodes.isEmpty()) {
-            throw new Exception("Cannot import a graph without nodes!");
+            report.logIssue(new Issue(NbBundle.getMessage(ImporterTGF.class, "importerTGF_error_emptynodes"), Issue.Level.CRITICAL));
         }
         for (String n : nodes) {
             addNode(n.substring(0, n.indexOf(" ")), n.substring(n.indexOf(" ")));

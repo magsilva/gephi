@@ -38,19 +38,17 @@ made subject to such option by the copyright holder.
 Contributor(s):
 
 Portions Copyrighted 2011 Gephi Consortium.
-*/
+ */
 package org.gephi.visualization.apiimpl;
 
+import com.jogamp.newt.event.MouseListener;
 import java.awt.event.KeyListener;
-import java.awt.event.MouseListener;
-import java.awt.event.MouseMotionListener;
-import java.awt.event.MouseWheelListener;
 
 /**
  *
  * @author Mathieu Bastian
  */
-public interface GraphIO extends MouseListener, MouseWheelListener, MouseMotionListener, KeyListener {
+public interface GraphIO extends MouseListener, KeyListener {
 
     public float[] getMousePosition();
 
@@ -73,4 +71,6 @@ public interface GraphIO extends MouseListener, MouseWheelListener, MouseMotionL
     public void centerOnGraph();
 
     public void centerOnCoordinate(float x, float y, float z);
+
+    public boolean isDragging();
 }

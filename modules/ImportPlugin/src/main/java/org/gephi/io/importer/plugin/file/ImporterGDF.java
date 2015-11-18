@@ -43,6 +43,7 @@
 package org.gephi.io.importer.plugin.file;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.Reader;
 import java.util.ArrayList;
@@ -80,8 +81,8 @@ public class ImporterGDF implements FileImporter, LongTask {
     private List<String> nodeLines = new ArrayList<String>();
     private List<String> edgeLines = new ArrayList<String>();
     //Matcher
-    private String[] nodeLineStart;
-    private String[] edgeLineStart;
+    private final String[] nodeLineStart;
+    private final String[] edgeLineStart;
     //Columns
     private GDFColumn[] nodeColumns;
     private GDFColumn[] edgeColumns;
@@ -100,6 +101,11 @@ public class ImporterGDF implements FileImporter, LongTask {
             importData(lineReader);
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            try {
+                lineReader.close();
+            } catch (IOException ex) {
+            }
         }
         return !cancel;
     }
@@ -165,6 +171,9 @@ public class ImporterGDF implements FileImporter, LongTask {
             //Create Edge
             EdgeDraft edge = container.factory().newEdgeDraft();
 
+            //Default to undirected unless stated
+            edge.setDirection(EdgeDirection.UNDIRECTED);
+
             Matcher m = pattern.matcher(edgeLine);
             int count = 0;
             String id = "";
@@ -211,14 +220,12 @@ public class ImporterGDF implements FileImporter, LongTask {
                     if (isEdgeFirstLine(line)) {
                         edgesWalking = true;
                         findEdgeColumns(line);
+                    } else if (!edgesWalking) {
+                        //Nodes
+                        nodeLines.add(line);
                     } else {
-                        if (!edgesWalking) {
-                            //Nodes
-                            nodeLines.add(line);
-                        } else {
-                            //Edges
-                            edgeLines.add(line);
-                        }
+                        //Edges
+                        edgeLines.add(line);
                     }
                 }
             } else {
@@ -444,9 +451,11 @@ public class ImporterGDF implements FileImporter, LongTask {
                         node.setY(Float.parseFloat(data));
                         break;
                     case COLOR:
-                        String[] rgb = data.split(",");
+                        String[] rgb = data.replace(" ", "").split(",");
                         if (rgb.length == 3) {
                             node.setColor(rgb[0], rgb[1], rgb[2]);
+                        } else {
+                            node.setColor(data);
                         }
                         break;
                     case FIXED:
@@ -483,9 +492,11 @@ public class ImporterGDF implements FileImporter, LongTask {
             try {
                 switch (column.getEdgeColumn()) {
                     case COLOR:
-                        String[] rgb = data.split(",");
+                        String[] rgb = data.replace(" ", "").split(",");
                         if (rgb.length == 3) {
                             edge.setColor(rgb[0], rgb[1], rgb[2]);
+                        } else {
+                            edge.setColor(data);
                         }
                         break;
                     case WEIGHT:

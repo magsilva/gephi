@@ -41,6 +41,7 @@
  */
 package org.gephi.io.importer.plugin.file;
 
+import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.Reader;
 import java.util.ArrayList;
@@ -118,6 +119,11 @@ public class ImporterVNA implements FileImporter, LongTask {
             importData(lineReader);
         } catch (Exception e) {
             report.logIssue(new Issue(e, Issue.Level.SEVERE));
+        } finally {
+            try {
+                lineReader.close();
+            } catch (IOException ex) {
+            }
         }
         return !cancel;
     }
@@ -292,9 +298,7 @@ public class ImporterVNA implements FileImporter, LongTask {
                         node.setY(Float.parseFloat(nodeProperties[i]));
                         break;
                     case NODE_COLOR:
-                        // Add just shades of red as NetDraw VNA is not specific
-                        // about color.
-                        node.setColor(Integer.parseInt(nodeProperties[i]), 0, 0);
+                        node.setColor(nodeProperties[i]);
                         break;
                     case NODE_SIZE:
                         node.setSize(Float.parseFloat(nodeProperties[i]));

@@ -55,7 +55,7 @@ import org.gephi.io.processor.spi.Processor;
 import org.gephi.project.api.Workspace;
 
 /**
- * Manage and control the import executionf low.
+ * Manage and control the import execution low.
  * <p>
  * This controller is a singleton and can therefore be found in Lookup:
  * <pre>ImportController ic = Lookup.getDefault().lookup(ImportController.class);</pre>
@@ -82,6 +82,8 @@ public interface ImportController {
     public void process(Container container);
 
     public void process(Container container, Processor processor, Workspace workspace);
+
+    public void process(Container[] containers, Processor processor, Workspace workspace);
 
     public FileType[] getFileTypes();
 

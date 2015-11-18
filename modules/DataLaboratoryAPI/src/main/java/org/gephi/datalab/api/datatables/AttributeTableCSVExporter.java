@@ -45,11 +45,22 @@ import com.csvreader.CsvWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
-import org.gephi.data.attributes.api.AttributeColumn;
-import org.gephi.data.attributes.api.AttributeTable;
-import org.gephi.graph.api.Attributable;
+import java.util.ArrayList;
+import java.util.List;
+import org.gephi.datalab.api.AttributeColumnsController;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.Table;
 import org.gephi.graph.api.Edge;
+import org.gephi.graph.api.Element;
+import org.gephi.graph.api.Graph;
+import org.gephi.graph.api.TimeFormat;
+import org.gephi.graph.api.types.IntervalMap;
+import org.gephi.graph.api.types.IntervalSet;
+import org.gephi.graph.api.types.TimestampMap;
+import org.gephi.graph.api.types.TimestampSet;
+import org.openide.util.Lookup;
 
 public class AttributeTableCSVExporter {
 
@@ -57,30 +68,106 @@ public class AttributeTableCSVExporter {
     public static final int FAKE_COLUMN_EDGE_SOURCE = -1;
     public static final int FAKE_COLUMN_EDGE_TARGET = -2;
     public static final int FAKE_COLUMN_EDGE_TYPE = -3;
-
+    
     /**
      * <p>Export a AttributeTable to the specified file.</p>
      *
-     * @param table Table to export
-     * @param file File to write
-     * @param separator Separator to use for separating values of a row in the CSV file. If null ',' will be used.
-     * @param charset Charset encoding for the file
-     * @param columnsToExport Indicates the indexes of the columns to export. All columns will be exported if null
+     * @param graph Graph containing the table and rows
+     * @param table Table to export. Cannot be null
+     * @param out Ouput stream to write. Cannot be null.
      * @throws IOException When an error happens while writing the file
      */
-    public static void writeCSVFile(AttributeTable table, File file, Character separator, Charset charset, Integer[] columnsToExport, Attributable[] rows) throws IOException {
-        FileOutputStream out = new FileOutputStream(file);
+    public static void writeCSVFile(Graph graph, Table table, OutputStream out) throws IOException {
+        writeCSVFile(graph, table, out, null, null, null, null);
+    }
+    
+    /**
+     * <p>Export a AttributeTable to the specified file.</p>
+     *
+     * @param graph Graph containing the table and rows
+     * @param table Table to export. Cannot be null
+     * @param file File to write. Cannot be null.
+     * @throws IOException When an error happens while writing the file
+     */
+    public static void writeCSVFile(Graph graph, Table table, File file) throws IOException {
+        if(file == null){
+            throw new IllegalArgumentException("file cannot be null");
+        }
+        
+        writeCSVFile(graph, table, new FileOutputStream(file), null, null, null, null);
+    }
+    
+    /**
+     * <p>Export a AttributeTable to the specified file.</p>
+     *
+     * @param graph Graph containing the table and rows
+     * @param table Table to export. Cannot be null
+     * @param file File to write. Cannot be null.
+     * @param separator Separator to use for separating values of a row in the CSV file. If null ',' will be used.
+     * @param charset Charset encoding for the file. If null, UTF-8 will be used
+     * @param columnIndexesToExport Indicates the indexes of the columns to export. All columns will be exported if null. For special columns in edges table, use {@code FAKE_COLUMN_EDGE_} values in this class.
+     * @param rows Elements (table rows: nodes/edges) to include in the exported file. Cannot be null. If null, all nodes/edges will be exported.
+     * @throws IOException When an error happens while writing the file
+     */
+    public static void writeCSVFile(Graph graph, Table table, File file, Character separator, Charset charset, Integer[] columnIndexesToExport, Element[] rows) throws IOException {
+        if(file == null){
+            throw new IllegalArgumentException("file cannot be null");
+        }
+        
+        writeCSVFile(graph, table, new FileOutputStream(file), separator, charset, columnIndexesToExport, rows);
+    }
+    
+    /**
+     * <p>Export a AttributeTable to the specified file.</p>
+     *
+     * @param graph Graph containing the table and rows
+     * @param table Table to export. Cannot be null
+     * @param out Ouput stream to write. Cannot be null.
+     * @param separator Separator to use for separating values of a row in the CSV file. If null ',' will be used.
+     * @param charset Charset encoding for the file. If null, UTF-8 will be used
+     * @param columnIndexesToExport Indicates the indexes of the columns to export. All columns will be exported if null. For special columns in edges table, use {@code FAKE_COLUMN_EDGE_} values in this class.
+     * @param rows Elements (table rows: nodes/edges) to include in the exported file. Cannot be null. If null, all nodes/edges will be exported.
+     * @throws IOException When an error happens while writing the file
+     */
+    public static void writeCSVFile(Graph graph, Table table, OutputStream out, Character separator, Charset charset, Integer[] columnIndexesToExport, Element[] rows) throws IOException {
+        if(out == null){
+            throw new IllegalArgumentException("out cannot be null");
+        }
+        
         if (separator == null) {
             separator = DEFAULT_SEPARATOR;
         }
 
-        AttributeColumn columns[] = table.getColumns();
-
-        if (columnsToExport == null) {
-            columnsToExport = new Integer[columns.length];
-            for (int i = 0; i < columnsToExport.length; i++) {
-                columnsToExport[i] = columns[i].getIndex();
+        if(charset == null){
+            charset = Charset.forName("UTF-8");
+        }
+        
+        AttributeColumnsController ac = Lookup.getDefault().lookup(AttributeColumnsController.class);
+        boolean isEdgeTable = ac.isEdgeTable(table);
+        if(rows == null){
+            if(isEdgeTable){
+                rows = graph.getEdges().toArray();
+            }else{
+                rows = graph.getNodes().toArray();
             }
+        }
+        
+        TimeFormat timeFormat = graph.getModel().getTimeFormat();
+
+        if (columnIndexesToExport == null) {
+            List<Integer> columnIndexesToExportList = new ArrayList<Integer>();
+            
+            //Add special columns for edges table:
+            if(isEdgeTable){
+                columnIndexesToExportList.add(FAKE_COLUMN_EDGE_SOURCE);
+                columnIndexesToExportList.add(FAKE_COLUMN_EDGE_TARGET);
+                columnIndexesToExportList.add(FAKE_COLUMN_EDGE_TYPE);
+            }
+            
+            for (Column column : table) {
+                columnIndexesToExportList.add(column.getIndex());
+            }
+            columnIndexesToExport = columnIndexesToExportList.toArray(new Integer[0]);
         }
 
         CsvWriter writer = new CsvWriter(out, separator, charset);
@@ -88,8 +175,8 @@ public class AttributeTableCSVExporter {
 
 
         //Write column headers:
-        for (int column = 0; column < columnsToExport.length; column++) {
-            int columnIndex = columnsToExport[column];
+        for (int column = 0; column < columnIndexesToExport.length; column++) {
+            int columnIndex = columnIndexesToExport[column];
 
             if (columnIndex == FAKE_COLUMN_EDGE_SOURCE) {
                 writer.write("Source");
@@ -108,21 +195,31 @@ public class AttributeTableCSVExporter {
         Object value;
         String text;
         for (int row = 0; row < rows.length; row++) {
-            for (int column = 0; column < columnsToExport.length; column++) {
-                int columnIndex = columnsToExport[column];
+            for (int i = 0; i < columnIndexesToExport.length; i++) {
+                int columnIndex = columnIndexesToExport[i];
                 
                 if (columnIndex == FAKE_COLUMN_EDGE_SOURCE) {
-                    value = ((Edge)rows[row]).getSource().getNodeData().getId();
+                    value = ((Edge)rows[row]).getSource().getId();
                 } else if (columnIndex == FAKE_COLUMN_EDGE_TARGET) {
-                    value = ((Edge)rows[row]).getTarget().getNodeData().getId();
+                    value = ((Edge)rows[row]).getTarget().getId();
                 } else if (columnIndex == FAKE_COLUMN_EDGE_TYPE) {
                     value = ((Edge)rows[row]).isDirected() ? "Directed" : "Undirected";
                 } else {
-                    value = rows[row].getAttributes().getValue(columnIndex);
+                    value = rows[row].getAttribute(table.getColumn(columnIndex));
                 }
 
                 if (value != null) {
-                    text = value.toString();
+                    if(value instanceof TimestampSet){
+                        text = ((TimestampSet) value).toString(timeFormat);
+                    } else if(value instanceof TimestampMap){
+                        text = ((TimestampMap) value).toString(timeFormat);
+                    } else if(value instanceof IntervalSet){
+                        text = ((IntervalSet) value).toString(timeFormat);
+                    } else if(value instanceof IntervalMap){
+                        text = ((IntervalMap) value).toString(timeFormat);
+                    } else {
+                        text = value.toString();
+                    }
                 } else {
                     text = "";
                 }

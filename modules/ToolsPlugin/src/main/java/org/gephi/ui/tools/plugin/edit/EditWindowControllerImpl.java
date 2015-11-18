@@ -41,19 +41,17 @@
  */
 package org.gephi.ui.tools.plugin.edit;
 
-import java.lang.reflect.InvocationTargetException;
 import javax.swing.SwingUtilities;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Node;
 import org.gephi.tools.api.EditWindowController;
-import org.openide.util.Exceptions;
 import org.openide.util.lookup.ServiceProvider;
 import org.openide.windows.WindowManager;
 
 /**
  * Implementation of EditWindowController interface of Tools API.
  *
- * @author Eduardo Ramos <eduramiba@gmail.com>
+ * @author Eduardo Ramos
  */
 @ServiceProvider(service = EditWindowController.class)
 public class EditWindowControllerImpl implements EditWindowController {

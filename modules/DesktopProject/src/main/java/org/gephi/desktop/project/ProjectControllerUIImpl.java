@@ -93,8 +93,8 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
     private boolean closeProject = false;
     private boolean newWorkspace = false;
     private boolean deleteWorkspace = false;
-    private boolean cleanWorkspace = false;
     private boolean duplicateWorkspace = false;
+    private boolean renameWorkspace = false;
     //Project
     private ProjectController controller;
     //Utilities
@@ -213,7 +213,7 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
                     public void run() {
                         JFrame frame = (JFrame) WindowManager.getDefault().getMainWindow();
                         String title = frame.getTitle();
-                        title = title.substring(0, title.indexOf('-') - 1) + " - " + SaveAsFileName;
+                        title = title.substring(0, title.indexOf(" - ")) + " - " + SaveAsFileName;
                         frame.setTitle(title);
                     }
                 });
@@ -253,15 +253,15 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
             closeProject = false;
             newWorkspace = false;
             deleteWorkspace = false;
-            cleanWorkspace = false;
             duplicateWorkspace = false;
+            renameWorkspace = false;
 
             //Title bar
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     JFrame frame = (JFrame) WindowManager.getDefault().getMainWindow();
                     String title = frame.getTitle();
-                    title = title.substring(0, title.indexOf('-') - 1);
+                    title = title.substring(0, title.indexOf(" - "));
                     frame.setTitle(title);
                 }
             });
@@ -316,15 +316,11 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
             public void run() {
                 JFrame frame = (JFrame) WindowManager.getDefault().getMainWindow();
                 String title = frame.getTitle();
-                title = title.substring(0, title.indexOf('-') - 1);
+                title = title.substring(0, title.indexOf(" - "));
                 title += " - " + name;
                 frame.setTitle(title);
             }
         });
-    }
-
-    public boolean canCleanWorkspace() {
-        return cleanWorkspace;
     }
 
     public boolean canCloseProject() {
@@ -345,6 +341,10 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
 
     public boolean canDuplicateWorkspace() {
         return duplicateWorkspace;
+    }
+
+    public boolean canRenameWorkspace() {
+        return renameWorkspace;
     }
 
     public boolean canOpenFile() {
@@ -372,8 +372,8 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
         openFile = false;
         newWorkspace = false;
         deleteWorkspace = false;
-        cleanWorkspace = false;
         duplicateWorkspace = false;
+        renameWorkspace = false;
     }
 
     private void unlockProjectActions() {
@@ -385,8 +385,8 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
             projectProperties = true;
             if (controller.getCurrentProject().getLookup().lookup(WorkspaceProvider.class).hasCurrentWorkspace()) {
                 deleteWorkspace = true;
-                cleanWorkspace = true;
                 duplicateWorkspace = true;
+                renameWorkspace = true;
             }
         }
         openProject = true;
@@ -418,6 +418,7 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
 
         //Init dialog
         final JFileChooser chooser = new JFileChooser(lastPath);
+        chooser.setMultiSelectionEnabled(true);
         DialogFileFilter gephiFilter = new DialogFileFilter(NbBundle.getMessage(ProjectControllerUIImpl.class, "OpenProject_filechooser_filter"));
         gephiFilter.addExtension(".gephi");
 
@@ -442,14 +443,31 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
         int returnFile = chooser.showOpenDialog(null);
 
         if (returnFile == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            file = FileUtil.normalizeFile(file);
-            FileObject fileObject = FileUtil.toFileObject(file);
+            File[] files = chooser.getSelectedFiles();
+            FileObject[] fileObjects = new FileObject[files.length];
 
-            //Save last path
-            NbPreferences.forModule(ProjectControllerUIImpl.class).put(LAST_PATH, file.getAbsolutePath());
+            int i = 0;
+            File gephiFile = null;
+            for (File file : files) {
+                file = FileUtil.normalizeFile(file);
+                FileObject fileObject = FileUtil.toFileObject(file);
+                fileObjects[i++] = fileObject;
 
-            if (fileObject.getExt().equalsIgnoreCase("gephi")) {
+                if (fileObject.getExt().equalsIgnoreCase("gephi")) {
+                    if (gephiFile != null) {
+                        NotifyDescriptor.Message msg = new NotifyDescriptor.Message(NbBundle.getMessage(ProjectControllerUIImpl.class, "ProjectControllerUI.error.multipleGephi"), NotifyDescriptor.ERROR_MESSAGE);
+                        DialogDisplayer.getDefault().notify(msg);
+                        return;
+                    } else {
+                        gephiFile = file;
+                    }
+                }
+
+                //Save last path
+                NbPreferences.forModule(ProjectControllerUIImpl.class).put(LAST_PATH, file.getAbsolutePath());
+            }
+
+            if (gephiFile != null) {
                 //Project
                 if (controller.getCurrentProject() != null) {
                     if (!closeCurrentProject()) {
@@ -458,7 +476,7 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
                 }
 
                 try {
-                    loadProject(file);
+                    loadProject(gephiFile);
                 } catch (Exception ew) {
                     ew.printStackTrace();
                     NotifyDescriptor.Message msg = new NotifyDescriptor.Message(NbBundle.getMessage(ProjectControllerUIImpl.class, "OpenProject.defaulterror"), NotifyDescriptor.WARNING_MESSAGE);
@@ -466,7 +484,7 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
                 }
             } else {
                 //Import
-                importController.importFile(fileObject);
+                importController.importFiles(fileObjects);
             }
         }
     }
@@ -500,10 +518,6 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
         return controller.newWorkspace(controller.getCurrentProject());
     }
 
-    public void cleanWorkspace() {
-        controller.cleanWorkspace(controller.getCurrentWorkspace());
-    }
-
     public void deleteWorkspace() {
         if (controller.getCurrentProject().getLookup().lookup(WorkspaceProvider.class).getWorkspaces().length == 1) {
             //Close project
@@ -514,15 +528,15 @@ public class ProjectControllerUIImpl implements ProjectControllerUI {
             closeProject = false;
             newWorkspace = false;
             deleteWorkspace = false;
-            cleanWorkspace = false;
             duplicateWorkspace = false;
+            renameWorkspace = false;
 
             //Title bar
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     JFrame frame = (JFrame) WindowManager.getDefault().getMainWindow();
                     String title = frame.getTitle();
-                    title = title.substring(0, title.indexOf('-') - 1);
+                    title = title.substring(0, title.indexOf(" - "));
                     frame.setTitle(title);
                 }
             });

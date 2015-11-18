@@ -50,6 +50,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
@@ -67,7 +68,7 @@ import org.openide.util.NbPreferences;
 
 /**
  * 
- * @author Eduardo Ramos <eduramiba@gmail.com>
+ * @author Eduardo Ramos
  */
 public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
 
@@ -81,7 +82,8 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
     private int columnCount = 0;
     private boolean hasSourceNodeColumn = false;
     private boolean hasTargetNodeColumn = false;
-    private boolean columnNamesRepeated = false;
+    private boolean hasColumnNamesRepeated = false;
+    private boolean hasRowsMissingSourcesOrTargets = false;
     private ValidationPanel validationPanel;
 
     /** Creates new form ImportCSVUIVisualPanel1 */
@@ -124,6 +126,7 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
         try {
             SwingUtilities.invokeAndWait(new Runnable() {
 
+                @Override
                 public void run() {
                     validationPanel = new ValidationPanel();
                     validationPanel.setInnerComponent(ImportCSVUIVisualPanel1.this);
@@ -132,6 +135,7 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
 
                     validationGroup.add(pathTextField, new Validator<String>() {
 
+                        @Override
                         public boolean validate(Problems prblms, String string, String t) {
                             if (!isValidFile()) {
                                 prblms.add(getMessage("ImportCSVUIVisualPanel1.validation.invalid-file"));
@@ -141,12 +145,18 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
                                 prblms.add(getMessage("ImportCSVUIVisualPanel1.validation.no-columns"));
                                 return false;
                             }
-                            if (columnNamesRepeated) {
+                            if (hasColumnNamesRepeated()) {
                                 prblms.add(getMessage("ImportCSVUIVisualPanel1.validation.repeated-columns"));
                                 return false;
                             }
                             if (!areValidColumnsForTable()) {
                                 prblms.add(getMessage("ImportCSVUIVisualPanel1.validation.edges.no-source-target-columns"));
+                                return false;
+                            }
+                            if (hasRowsMissingSourcesOrTargets()) {
+                                prblms.add(NbBundle.getMessage(ImportCSVUIVisualPanel1.class, 
+                                    "ImportCSVUIVisualPanel1.validation.edges.empty-sources-or-targets"
+                                ));
                                 return false;
                             }
                             return true;
@@ -180,32 +190,55 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
 
                 //Check for repeated column names:
                 Set<String> columnNamesSet = new HashSet<String>();
-                columnNamesRepeated = false;
+                hasColumnNamesRepeated = false;
                 hasSourceNodeColumn = false;
                 hasTargetNodeColumn = false;
+                int sourceColumnIndex = 0, 
+                    targetColumnIndex = 0,
+                    currentColumn = 0;
                 for (String header : headers) {
                     if (header.equalsIgnoreCase("source")) {
                         hasSourceNodeColumn = true;
+                        sourceColumnIndex = currentColumn;
                     }
                     if (header.equalsIgnoreCase("target")) {
                         hasTargetNodeColumn = true;
+                        targetColumnIndex = currentColumn;
                     }
                     if (columnNamesSet.contains(header)) {
-                        columnNamesRepeated = true;
+                        hasColumnNamesRepeated = true;
                         break;
                     }
                     columnNamesSet.add(header);
+                    currentColumn++;
                 }
 
                 ArrayList<String[]> records = new ArrayList<String[]>();
+                hasRowsMissingSourcesOrTargets = false;
+                ImportCSVUIWizardAction.Mode mode = getMode();
                 if (columnCount > 0) {
                     String[] currentRecord;
-                    while (reader.readRecord() && records.size() < MAX_ROWS_PREVIEW) {
-                        currentRecord = new String[reader.getColumnCount()];
+                    
+                    while (reader.readRecord()) {
+                        int recordColumnCount = reader.getColumnCount();
+                        currentRecord = new String[recordColumnCount];
                         for (int i = 0; i < currentRecord.length; i++) {
                             currentRecord[i] = reader.get(i);
                         }
-                        records.add(currentRecord);
+                        
+                        // Search for missing source or target columns for edges table
+                        if(mode == ImportCSVUIWizardAction.Mode.EDGES_TABLE){
+                            if (recordColumnCount < sourceColumnIndex
+                                    || currentRecord[sourceColumnIndex].trim().isEmpty()
+                                    || recordColumnCount < targetColumnIndex
+                                    || currentRecord[targetColumnIndex].trim().isEmpty()) {
+                                hasRowsMissingSourcesOrTargets = true;
+                            }
+                        }
+                        
+                        if (records.size() < MAX_ROWS_PREVIEW) {
+                            records.add(currentRecord);
+                        }
                     }
                 }
                 reader.close();
@@ -213,26 +246,32 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
                 final String[][] values = records.toArray(new String[0][]);
                 previewTable.setModel(new TableModel() {
 
+                    @Override
                     public int getRowCount() {
                         return values.length;
                     }
 
+                    @Override
                     public int getColumnCount() {
                         return columnNames.length;
                     }
 
+                    @Override
                     public String getColumnName(int columnIndex) {
                         return columnNames[columnIndex];
                     }
 
+                    @Override
                     public Class<?> getColumnClass(int columnIndex) {
                         return String.class;
                     }
 
+                    @Override
                     public boolean isCellEditable(int rowIndex, int columnIndex) {
                         return false;
                     }
 
+                    @Override
                     public Object getValueAt(int rowIndex, int columnIndex) {
                         if (values[rowIndex].length > columnIndex) {
                             return values[rowIndex][columnIndex];
@@ -241,12 +280,15 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
                         }
                     }
 
+                    @Override
                     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
                     }
 
+                    @Override
                     public void addTableModelListener(TableModelListener l) {
                     }
 
+                    @Override
                     public void removeTableModelListener(TableModelListener l) {
                     }
                 });
@@ -254,7 +296,7 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
                 Exceptions.printStackTrace(ex);
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this, getMessage("ImportCSVUIVisualPanel1.validation.error"), getMessage("ImportCSVUIVisualPanel1.validation.file-permissions-error"), JOptionPane.ERROR_MESSAGE);
-            }
+            } 
         }
         wizard1.fireChangeEvent();
         pathTextField.setText(pathTextField.getText());//To fire validation panel messages.
@@ -297,8 +339,8 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
         return columnCount;
     }
 
-    public boolean isColumnNamesRepeated() {
-        return columnNamesRepeated;
+    public boolean hasColumnNamesRepeated() {
+        return hasColumnNamesRepeated;
     }
 
     public boolean isValidFile() {
@@ -321,7 +363,11 @@ public class ImportCSVUIVisualPanel1 extends javax.swing.JPanel {
     }
 
     public boolean isCSVValid() {
-        return isValidFile() && hasColumns() && !columnNamesRepeated && areValidColumnsForTable();
+        return isValidFile() && hasColumns() && !hasColumnNamesRepeated && areValidColumnsForTable() &&!hasRowsMissingSourcesOrTargets();
+    }
+
+    public boolean hasRowsMissingSourcesOrTargets() {
+        return hasRowsMissingSourcesOrTargets;
     }
 
     class SeparatorWrapper {

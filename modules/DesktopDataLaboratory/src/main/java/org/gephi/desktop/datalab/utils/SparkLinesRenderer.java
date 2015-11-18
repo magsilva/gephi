@@ -45,28 +45,29 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
-import org.gephi.data.attributes.type.DynamicType;
-import org.gephi.data.attributes.type.Interval;
-import org.gephi.data.attributes.type.NumberList;
-import org.gephi.dynamic.api.DynamicModel.TimeFormat;
+import org.gephi.graph.api.Interval;
+import org.gephi.graph.api.TimeFormat;
+import org.gephi.graph.api.types.IntervalMap;
+import org.gephi.graph.api.types.TimestampMap;
 import org.gephi.utils.sparklines.SparklineGraph;
 import org.gephi.utils.sparklines.SparklineParameters;
 
 /**
  * TableCellRenderer for drawing sparklines from cells that have a NumberList or DynamicNumber as their value.
  *
- * @author Eduardo Ramos <eduramiba@gmail.com>
+ * @author Eduardo Ramos
  */
 public class SparkLinesRenderer extends DefaultTableCellRenderer {
 
     private static final Color SELECTED_BACKGROUND = new Color(225, 255, 255);
     private static final Color UNSELECTED_BACKGROUND = Color.white;
     private TimeFormat timeFormat = TimeFormat.DOUBLE;
+    private boolean drawGraphics = false;
 
     @Override
     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
@@ -74,79 +75,92 @@ public class SparkLinesRenderer extends DefaultTableCellRenderer {
             //Render empty string when null
             return super.getTableCellRendererComponent(table, null, isSelected, hasFocus, row, column);
         }
-
+        
         String stringRepresentation = null;
-        Number[] xValues = null;
-        Number[] yValues = null;
-        if (value instanceof NumberList) {
-            yValues = getNumberListNumbers((NumberList) value);
-            stringRepresentation = value.toString();
-        } else if (value instanceof DynamicType) {
-            //Use the intervals start time as X values
-            Number[][] values = getDynamicNumberNumbers((DynamicType) value);
-            xValues = values[0];
-            yValues = values[1];
-            stringRepresentation = ((DynamicType) value).toString(timeFormat == TimeFormat.DOUBLE);
-        } else {
-            throw new IllegalArgumentException("Only number lists and dynamic numbers are supported for sparklines rendering");
+        if (value instanceof Number[]) {
+            stringRepresentation = Arrays.toString((Number[]) value);
+        } else if (value instanceof TimestampMap) {
+            stringRepresentation = ((TimestampMap) value).toString(timeFormat);
+        } else if (value instanceof IntervalMap) {
+            stringRepresentation = ((IntervalMap) value).toString(timeFormat);
         }
+        
+        if (drawGraphics) {
+            Number[] xValues = null;
+            Number[] yValues = null;
+            if (value instanceof Number[]) {
+                yValues = (Number[]) value;
+            } else if (value instanceof TimestampMap) {
+                //Use the intervals start time as X values
+                Number[][] values = getTimestampMapNumbers((TimestampMap) value);
+                xValues = values[0];
+                yValues = values[1];
+            } else if (value instanceof IntervalMap) {
+                //Use the intervals start time as X values
+                Number[][] values = getIntervalMapNumbers((IntervalMap) value);
+                xValues = values[0];
+                yValues = values[1];
+            } else {
+                throw new IllegalArgumentException("Only number lists and dynamic numbers are supported for sparklines rendering");
+            }
 
-        //If there is less than 1 element, show as a String.
-        if (yValues.length < 1) {
+            //If there is less than 1 element, show as a String.
+            if (yValues.length < 1) {
+                return super.getTableCellRendererComponent(table, stringRepresentation, isSelected, hasFocus, row, column);
+            }
+
+            if (yValues.length == 1) {
+                //SparklineGraph needs at least 2 values, duplicate the only one we have to get a sparkline with a single line showing that the value does not change over time
+                xValues = null;
+                yValues = new Number[]{yValues[0], yValues[0]};
+            }
+
+            JLabel label = new JLabel();
+            Color background;
+            if (isSelected) {
+                background = SELECTED_BACKGROUND;
+            } else {
+                background = UNSELECTED_BACKGROUND;
+            }
+
+            //Note: Can't use interactive SparklineComponent because TableCellEditors don't receive mouse events.
+            final SparklineParameters sparklineParameters = new SparklineParameters(table.getColumnModel().getColumn(column).getWidth() - 1, table.getRowHeight(row) - 1, Color.BLUE, background, Color.RED, Color.GREEN, null);
+            final BufferedImage i = SparklineGraph.draw(xValues, yValues, sparklineParameters);
+            label.setIcon(new ImageIcon(i));
+            label.setToolTipText(stringRepresentation);//String representation as tooltip
+
+            return label;
+        } else {
             return super.getTableCellRendererComponent(table, stringRepresentation, isSelected, hasFocus, row, column);
         }
 
-        if (yValues.length == 1) {
-            //SparklineGraph needs at least 2 values, duplicate the only one we have to get a sparkline with a single line showing that the value does not change over time
-            xValues = null;
-            yValues = new Number[]{yValues[0], yValues[0]};
-        }
-
-        JLabel label = new JLabel();
-        Color background;
-        if (isSelected) {
-            background = SELECTED_BACKGROUND;
-        } else {
-            background = UNSELECTED_BACKGROUND;
-        }
-
-        //Note: Can't use interactive SparklineComponent because TableCellEditors don't receive mouse events.
-        final SparklineParameters sparklineParameters = new SparklineParameters(table.getColumnModel().getColumn(column).getWidth() - 1, table.getRowHeight(row) - 1, Color.BLUE, background, Color.RED, Color.GREEN, null);
-        final BufferedImage i = SparklineGraph.draw(xValues, yValues, sparklineParameters);
-        label.setIcon(new ImageIcon(i));
-        label.setToolTipText(stringRepresentation);//String representation as tooltip
-
-        return label;
     }
-
-    private Number[] getNumberListNumbers(NumberList numberList) {
-        ArrayList<Number> numbers = new ArrayList<Number>();
-        Number n;
-        for (int i = 0; i < numberList.size(); i++) {
-            n = (Number) numberList.getItem(i);
-            if (n != null) {
-                numbers.add(n);
-            }
-        }
-        return numbers.toArray(new Number[0]);
+    
+    private Number[][] getTimestampMapNumbers(TimestampMap timestampMap) {
+        Double[] timestamps = timestampMap.toKeysArray();
+        Number[] values = (Number[]) timestampMap.toValuesArray();
+        
+        return new Number[][]{timestamps, values};
     }
-
-    private Number[][] getDynamicNumberNumbers(DynamicType dynamicNumber) {
+    
+    private Number[][] getIntervalMapNumbers(IntervalMap intervalMap) {
         ArrayList<Number> xValues = new ArrayList<Number>();
         ArrayList<Number> yValues = new ArrayList<Number>();
-        if (dynamicNumber == null) {
+        if (intervalMap == null) {
             return new Number[2][0];
         }
 
-        List<Interval> intervals = dynamicNumber.getIntervals();
+        Interval[] intervals = intervalMap.toKeysArray();
+        Object[] values = intervalMap.toValuesArray();
         Number n;
-        for (Interval interval : intervals) {
-            n = (Number) interval.getValue();
+        for (int i = 0; i < intervals.length; i++) {
+            n = (Number) values[i];
             if (n != null) {
-                xValues.add(interval.getLow());
+                xValues.add(intervals[i].getLow());
                 yValues.add(n);
             }
         }
+        
         return new Number[][]{xValues.toArray(new Number[0]), yValues.toArray(new Number[0])};
     }
 
@@ -156,5 +170,13 @@ public class SparkLinesRenderer extends DefaultTableCellRenderer {
 
     public void setTimeFormat(TimeFormat timeFormat) {
         this.timeFormat = timeFormat;
+    }
+
+    public boolean isDrawGraphics() {
+        return drawGraphics;
+    }
+
+    public void setDrawGraphics(boolean drawGraphics) {
+        this.drawGraphics = drawGraphics;
     }
 }
