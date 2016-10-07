@@ -75,9 +75,9 @@ public class StatisticsModelUIImpl implements StatisticsModelUI {
     public StatisticsModelUIImpl(Workspace workspace) {
         this.workspace = workspace;
         runningList = Collections.synchronizedList(new ArrayList<Statistics>());
-        invisibleList = new ArrayList<StatisticsUI>();
-        resultMap = new HashMap<StatisticsUI, String>();
-        listeners = new ArrayList<ChangeListener>();
+        invisibleList = new ArrayList<>();
+        resultMap = new HashMap<>();
+        listeners = new ArrayList<>();
     }
 
     public void addResult(StatisticsUI ui) {
@@ -89,19 +89,23 @@ public class StatisticsModelUIImpl implements StatisticsModelUI {
         fireChangeEvent();
     }
 
+    @Override
     public String getResult(StatisticsUI statisticsUI) {
         return resultMap.get(statisticsUI);
     }
 
+    @Override
     public String getReport(Class<? extends Statistics> statistics) {
         StatisticsController controller = Lookup.getDefault().lookup(StatisticsController.class);
         return controller.getModel(workspace).getReport(statistics);
     }
 
+    @Override
     public boolean isStatisticsUIVisible(StatisticsUI statisticsUI) {
         return !invisibleList.contains(statisticsUI);
     }
 
+    @Override
     public boolean isRunning(StatisticsUI statisticsUI) {
         for (Statistics s : runningList.toArray(new Statistics[0])) {
             if (statisticsUI.getStatisticsClass().equals(s.getClass())) {
@@ -122,6 +126,7 @@ public class StatisticsModelUIImpl implements StatisticsModelUI {
         }
     }
 
+    @Override
     public Statistics getRunning(StatisticsUI statisticsUI) {
         for (Statistics s : runningList.toArray(new Statistics[0])) {
             if (statisticsUI.getStatisticsClass().equals(s)) {
@@ -142,12 +147,14 @@ public class StatisticsModelUIImpl implements StatisticsModelUI {
         }
     }
 
+    @Override
     public void addChangeListener(ChangeListener changeListener) {
         if (!listeners.contains(changeListener)) {
             listeners.add(changeListener);
         }
     }
 
+    @Override
     public void removeChangeListener(ChangeListener changeListener) {
         listeners.remove(changeListener);
     }
@@ -165,7 +172,6 @@ public class StatisticsModelUIImpl implements StatisticsModelUI {
 
     //PERSISTENCE
     public void writeXML(XMLStreamWriter writer) throws XMLStreamException {
-        writer.writeStartElement("statisticsmodelui");
 
         writer.writeStartElement("results");
         for (Map.Entry<StatisticsUI, String> entry : resultMap.entrySet()) {
@@ -176,8 +182,6 @@ public class StatisticsModelUIImpl implements StatisticsModelUI {
                 writer.writeEndElement();
             }
         }
-        writer.writeEndElement();
-
         writer.writeEndElement();
     }
 

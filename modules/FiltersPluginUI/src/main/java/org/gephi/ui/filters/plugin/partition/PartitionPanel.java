@@ -53,10 +53,7 @@ import java.awt.event.MouseListener;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.NumberFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -69,9 +66,8 @@ import javax.swing.JPopupMenu;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingUtilities;
 import javax.swing.plaf.basic.BasicListUI;
+import org.gephi.appearance.api.Partition;
 import org.gephi.filters.plugin.partition.PartitionBuilder.PartitionFilter;
-import org.gephi.partition.api.Part;
-import org.gephi.partition.api.Partition;
 import org.openide.util.NbBundle;
 
 /**
@@ -158,54 +154,53 @@ public class PartitionPanel extends javax.swing.JPanel {
 
     public void setup(final PartitionFilter filter) {
         this.filter = filter;
-        final Partition partition = filter.getCurrentPartition();
+        final Partition partition = filter.getPartition();
         if (partition != null) {
             refresh(partition, filter.getParts());
         }
     }
 
-    private void refresh(Partition partition, List<Part> currentParts) {
+    private void refresh(Partition partition, Set<Object> currentParts) {
         final DefaultListModel model = new DefaultListModel();
 
-        Set<Part> filterParts = new HashSet<Part>(currentParts);
-        Part[] parts = partition.getParts();
-        Arrays.sort(parts);
-        for (int i = 0; i < parts.length; i++) {
-            final Part p = parts[parts.length - 1 - i];
-            PartWrapper pw = new PartWrapper(p, p.getColor());
-            pw.setEnabled(filterParts.contains(p));
-            model.add(i, pw);
+        int i = 0;
+        for (Object p : partition.getSortedValues()) {
+            PartWrapper pw = new PartWrapper(p, partition.percentage(p), partition.getColor(p));
+            pw.setEnabled(currentParts.contains(p));
+            model.add(i++, pw);
         }
         list.setModel(model);
     }
 
     private static class PartWrapper {
 
-        private final Part part;
+        private final Object part;
+        private final float percentage;
         private final PaletteIcon icon;
         private final PaletteIcon disabledIcon;
         private boolean enabled = false;
-        private static final NumberFormat formatter = NumberFormat.getPercentInstance();
+        private static final NumberFormat FORMATTER = NumberFormat.getPercentInstance();
 
-        public PartWrapper(Part part, Color color) {
+        public PartWrapper(Object part, float percentage, Color color) {
             this.part = part;
+            this.percentage = percentage;
             this.icon = new PaletteIcon(color);
             this.disabledIcon = new PaletteIcon();
-            formatter.setMaximumFractionDigits(2);
+            FORMATTER.setMaximumFractionDigits(2);
         }
 
         public PaletteIcon getIcon() {
             return icon;
         }
 
-        public Part getPart() {
+        public Object getPart() {
             return part;
         }
 
         @Override
         public String toString() {
-            String percentage = formatter.format(part.getPercentage());
-            return part.getDisplayName() + " (" + percentage + ")";
+            String percentageStr = FORMATTER.format(percentage / 100f);
+            return (part == null ? "null" : part.toString()) + " (" + percentageStr + ")";
         }
 
         public boolean isEnabled() {
@@ -222,6 +217,7 @@ public class PartitionPanel extends javax.swing.JPanel {
         JMenuItem refreshItem = new JMenuItem(NbBundle.getMessage(PartitionPanel.class, "PartitionPanel.action.refresh"));
         refreshItem.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 setup(filter);
             }
@@ -230,18 +226,20 @@ public class PartitionPanel extends javax.swing.JPanel {
         JMenuItem selectItem = new JMenuItem(NbBundle.getMessage(PartitionPanel.class, "PartitionPanel.action.selectall"));
         selectItem.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 filter.selectAll();
-                refresh(filter.getCurrentPartition(), Arrays.asList(filter.getCurrentPartition().getParts()));
+                refresh(filter.getPartition(), new HashSet<>(filter.getParts()));
             }
         });
         popupMenu.add(selectItem);
         JMenuItem unselectItem = new JMenuItem(NbBundle.getMessage(PartitionPanel.class, "PartitionPanel.action.unselectall"));
         unselectItem.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 filter.unselectAll();
-                refresh(filter.getCurrentPartition(), new ArrayList<Part>());
+                refresh(filter.getPartition(), new HashSet<>());
             }
         });
         popupMenu.add(unselectItem);
@@ -292,26 +290,30 @@ public class PartitionPanel extends javax.swing.JPanel {
             COLOR_HEIGHT = 11;
         }
 
+        @Override
         public int getIconWidth() {
             return COLOR_WIDTH;
         }
 
+        @Override
         public int getIconHeight() {
             return COLOR_HEIGHT + 2;
         }
 
+        @Override
         public void paintIcon(Component c, Graphics g, int x, int y) {
+            g.setColor(color);
+            g.fillRect(x + 2, y, COLOR_WIDTH, COLOR_HEIGHT);
             g.setColor(BORDER_COLOR);
             g.drawRect(x + 2, y, COLOR_WIDTH, COLOR_HEIGHT);
-            g.setColor(color);
-            g.fillRect(x + 2 + 1, y + 1, COLOR_WIDTH - 1, COLOR_HEIGHT - 1);
+
         }
     }
 
-    /** This method is called from within the constructor to
-     * initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is
-     * always regenerated by the Form Editor.
+    /**
+     * This method is called from within the constructor to initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is always
+     * regenerated by the Form Editor.
      */
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents

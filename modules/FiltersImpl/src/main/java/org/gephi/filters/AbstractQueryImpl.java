@@ -64,21 +64,27 @@ public abstract class AbstractQueryImpl implements Query {
     protected Graph result;
 
     public AbstractQueryImpl() {
-        this.children = new ArrayList<AbstractQueryImpl>();
+        this.children = new ArrayList<>();
     }
 
+    @Override
     public abstract int getChildrenSlotsCount();
 
+    @Override
     public abstract int getPropertiesCount();
 
+    @Override
     public abstract String getPropertyName(int index);
 
+    @Override
     public abstract Object getPropertyValue(int index);
 
+    @Override
     public abstract String getName();
 
     public abstract void setName(String name);
 
+    @Override
     public Query[] getChildren() {
         return children.toArray(new Query[0]);
     }
@@ -100,6 +106,7 @@ public abstract class AbstractQueryImpl implements Query {
         children.remove((AbstractQueryImpl) subQuery);
     }
 
+    @Override
     public Query getParent() {
         return parent;
     }
@@ -125,8 +132,8 @@ public abstract class AbstractQueryImpl implements Query {
     }
 
     public AbstractQueryImpl[] getLeaves() {
-        ArrayList<AbstractQueryImpl> leaves = new ArrayList<AbstractQueryImpl>();
-        Deque<Query> stack = new ArrayDeque<Query>();
+        ArrayList<AbstractQueryImpl> leaves = new ArrayList<>();
+        Deque<Query> stack = new ArrayDeque<>();
         stack.add(this);
         while (!stack.isEmpty()) {
             AbstractQueryImpl query = (AbstractQueryImpl) stack.pop();
@@ -143,7 +150,7 @@ public abstract class AbstractQueryImpl implements Query {
     public AbstractQueryImpl copy() {
         AbstractQueryImpl copy = null;
         if (this instanceof FilterQueryImpl) {
-            copy = new FilterQueryImpl(this.getFilter());
+            copy = new FilterQueryImpl(this.getBuilder(), this.getFilter());
         } else if (this instanceof OperatorQueryImpl) {
             copy = new OperatorQueryImpl((Operator) this.getFilter());
         }
@@ -158,9 +165,10 @@ public abstract class AbstractQueryImpl implements Query {
         return copy;
     }
 
+    @Override
     public Query[] getQueries(Class<? extends Filter> filterClass) {
-        List<Query> r = new LinkedList<Query>();
-        LinkedList<Query> stack = new LinkedList<Query>();
+        List<Query> r = new LinkedList<>();
+        LinkedList<Query> stack = new LinkedList<>();
         stack.add(this);
         while (!stack.isEmpty()) {
             Query q = stack.pop();
@@ -176,9 +184,10 @@ public abstract class AbstractQueryImpl implements Query {
         return r.toArray(new Query[0]);
     }
 
+    @Override
     public Query[] getDescendantsAndSelf() {
-        List<Query> r = new LinkedList<Query>();
-        LinkedList<Query> stack = new LinkedList<Query>();
+        List<Query> r = new LinkedList<>();
+        LinkedList<Query> stack = new LinkedList<>();
         stack.add(this);
         while (!stack.isEmpty()) {
             Query q = stack.pop();

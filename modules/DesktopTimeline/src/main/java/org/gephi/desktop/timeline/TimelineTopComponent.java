@@ -48,13 +48,13 @@ import java.awt.event.ActionListener;
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import org.gephi.data.attributes.api.AttributeColumn;
 import org.gephi.timeline.api.TimelineController;
 import org.gephi.timeline.api.TimelineModel;
 import org.gephi.timeline.api.TimelineModelEvent;
 import org.gephi.timeline.api.TimelineModelListener;
 import org.gephi.ui.components.CloseButton;
 import org.gephi.ui.utils.UIUtils;
+import org.gephi.visualization.VizController;
 import org.netbeans.validation.api.ui.ValidationPanel;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -109,6 +109,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
         //Close button
         closeButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 controller.setEnabled(false);
                 setTimeLineVisible(false);
@@ -117,6 +118,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
 
         disableButon.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 controller.setEnabled(false);
             }
@@ -125,6 +127,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
         //Enable button
         enableTimelineButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 if (model != null) {
                     controller.setEnabled(true);
@@ -132,24 +135,25 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
             }
         });
 
-
         columnsButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 //Create popup
                 JPopupMenu menu = new JPopupMenu();
 
                 //Add columns
-                AttributeColumn selectedColumn = model.getChart() != null ? model.getChart().getColumn() : null;
+                String selectedColumn = model.getChart() != null ? model.getChart().getColumn() : null;
 
                 //Dynamic columns
-                AttributeColumn[] columns = controller.getDynamicGraphColumns();
+                String[] columns = controller.getDynamicGraphColumns();
 
-                for (final AttributeColumn col : columns) {
-                    boolean selected = col == selectedColumn;
-                    JRadioButtonMenuItem item = new JRadioButtonMenuItem(col.getTitle(), selected);
+                for (final String col : columns) {
+                    boolean selected = (col == null ? selectedColumn == null : col.equals(selectedColumn));
+                    JRadioButtonMenuItem item = new JRadioButtonMenuItem(col, selected);
                     item.addActionListener(new ActionListener() {
 
+                        @Override
                         public void actionPerformed(ActionEvent e) {
                             controller.selectColumn(col);
                         }
@@ -170,13 +174,14 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
                     JMenuItem disableItem = new JMenuItem(NbBundle.getMessage(TimelineTopComponent.class, "TimelineTopComponent.charts.disable"));
                     disableItem.addActionListener(new ActionListener() {
 
+                        @Override
                         public void actionPerformed(ActionEvent e) {
                             controller.selectColumn(null);
                         }
                     });
 
                     menu.add(disableItem);
-                    if(selectedColumn == null) {
+                    if (selectedColumn == null) {
                         disableItem.setEnabled(false);
                     }
                 }
@@ -187,6 +192,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
 
         settingsButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 //Create popup
                 JPopupMenu menu = new JPopupMenu();
@@ -197,6 +203,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
                         ImageUtilities.image2Icon(customBoundsIcon));
                 customBoundsItem.addActionListener(new ActionListener() {
 
+                    @Override
                     public void actionPerformed(ActionEvent e) {
                         CustomBoundsDialog d = new CustomBoundsDialog();
                         d.setup(model);
@@ -205,6 +212,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
                         final DialogDescriptor descriptor = new DialogDescriptor(validationPanel, title);
                         validationPanel.addChangeListener(new ChangeListener() {
 
+                            @Override
                             public void stateChanged(ChangeEvent e) {
                                 descriptor.setValid(!((ValidationPanel) e.getSource()).isProblem());
                             }
@@ -223,6 +231,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
                         ImageUtilities.image2Icon(animationIcon));
                 animationItem.addActionListener(new ActionListener() {
 
+                    @Override
                     public void actionPerformed(ActionEvent e) {
                         PlaySettingsDialog d = new PlaySettingsDialog();
                         d.setup(model);
@@ -242,6 +251,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
                         ImageUtilities.image2Icon(dateFormatIcon));
                 dateFormatItem.addActionListener(new ActionListener() {
 
+                    @Override
                     public void actionPerformed(ActionEvent e) {
                         TimeFormatDialog d = new TimeFormatDialog();
                         d.setup(model);
@@ -255,13 +265,13 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
                 });
                 menu.add(dateFormatItem);
 
-                
                 menu.show(settingsButton, 0, -menu.getPreferredSize().height);
             }
         });
 
         playButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 if (model != null) {
                     if (model.isPlaying() && !playButton.isSelected()) {
@@ -279,6 +289,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
         if (model != null) {
             SwingUtilities.invokeLater(new Runnable() {
 
+                @Override
                 public void run() {
                     drawer.setModel(TimelineTopComponent.this.model);
                     enableTimeline(TimelineTopComponent.this.model);
@@ -287,6 +298,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
         } else {
             SwingUtilities.invokeLater(new Runnable() {
 
+                @Override
                 public void run() {
                     drawer.setModel(TimelineTopComponent.this.model);
                     enableTimeline(null);
@@ -295,6 +307,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
         }
     }
 
+    @Override
     public void timelineModelChanged(TimelineModelEvent event) {
         if (event.getEventType().equals(TimelineModelEvent.EventType.MODEL)) {
             setup(event.getSource());
@@ -331,6 +344,7 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
     private void setPlaying(final boolean playing) {
         SwingUtilities.invokeLater(new Runnable() {
 
+            @Override
             public void run() {
                 playButton.setSelected(playing);
             }
@@ -339,10 +353,12 @@ public final class TimelineTopComponent extends JPanel implements TimelineModelL
 
     public void setTimeLineVisible(final boolean visible) {
         SwingUtilities.invokeLater(new Runnable() {
-
+            @Override
             public void run() {
                 if (visible != TimelineTopComponent.this.isVisible()) {
+
                     TimelineTopComponent.this.setVisible(visible);
+                    VizController.getInstance().getDrawable().reinitWindow();
                 }
             }
         });

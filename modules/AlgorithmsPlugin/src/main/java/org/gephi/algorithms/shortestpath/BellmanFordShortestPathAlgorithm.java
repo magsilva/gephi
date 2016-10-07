@@ -42,6 +42,7 @@
 package org.gephi.algorithms.shortestpath;
 
 import java.util.HashMap;
+import java.util.Map;
 import org.gephi.graph.api.DirectedGraph;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Node;
@@ -58,7 +59,7 @@ public class BellmanFordShortestPathAlgorithm extends AbstractShortestPathAlgori
     public BellmanFordShortestPathAlgorithm(DirectedGraph graph, Node sourceNode) {
         super(sourceNode);
         this.graph = graph;
-        predecessors = new HashMap<Node, Edge>();
+        predecessors = new HashMap<>();
     }
 
     @Override
@@ -104,25 +105,8 @@ public class BellmanFordShortestPathAlgorithm extends AbstractShortestPathAlgori
     }
 
     @Override
-    protected double edgeWeight(Edge edge) {
-        return edge.getWeight();
+    public Map<Node, Edge> getPredecessors() {
+        return predecessors;
     }
 
-    @Override
-    public Node getPredecessor(Node node) {
-        Edge edge = predecessors.get(node);
-        if (edge != null) {
-            if (edge.getSource() != node) {
-                return edge.getSource();
-            } else {
-                return edge.getTarget();
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public Edge getPredecessorIncoming(Node node) {
-        return predecessors.get(node);
-    }
 }

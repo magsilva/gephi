@@ -119,6 +119,7 @@ public class NodeDraftImpl extends ElementDraftImpl implements NodeDraft {
         return fixed;
     }
 
+    @Override
     public boolean isCreatedAuto() {
         return createdAuto;
     }
@@ -136,5 +137,10 @@ public class NodeDraftImpl extends ElementDraftImpl implements NodeDraft {
     @Override
     public Iterable<ColumnDraft> getColumns() {
         return container.getNodeColumns();
+    }
+
+    @Override
+    public String toString() {
+        return id;
     }
 }

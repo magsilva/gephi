@@ -112,6 +112,7 @@ public class MemoryStarvationManager implements NotificationListener {
         }
     }
 
+    @Override
     public void handleNotification(Notification n, Object o) {
         if (messageDelivered) {
             return;
@@ -198,7 +199,6 @@ public class MemoryStarvationManager implements NotificationListener {
             homePath = System.getProperty("user.dir");
         }
 
-        System.out.println("Setting Xmx to " + newXmx);
 
         File etc = new File(homePath, "etc");
         if (!etc.exists()) {
@@ -279,7 +279,6 @@ public class MemoryStarvationManager implements NotificationListener {
                     || t.getName().startsWith(STATISTICS_THREAD)
                     || t.getName().startsWith(PREVIEW_THREAD)) {
                 if (t.isAlive()) {
-                    System.out.println("Suspend Thread[" + t.getName() + ":" + t.getClass() + "]");
                     t.suspend();
                 }
             }
@@ -297,7 +296,6 @@ public class MemoryStarvationManager implements NotificationListener {
                     || t.getName().startsWith(STATISTICS_THREAD)
                     || t.getName().startsWith(PREVIEW_THREAD)) {
                 if (t.isAlive()) {
-                    System.out.println("Resume Thread[" + t.getName() + ":" + t.getClass() + "]");
                     t.resume();
                 }
             }
@@ -313,7 +311,6 @@ public class MemoryStarvationManager implements NotificationListener {
                     || t.getName().startsWith(EXPORTER_THREAD)
                     || t.getName().startsWith(STATISTICS_THREAD)
                     || t.getName().startsWith(PREVIEW_THREAD)) {
-                System.out.println("Interrupt Thread[" + t.getName() + ":" + t.getClass() + "]");
                 t.interrupt();
             }
         }

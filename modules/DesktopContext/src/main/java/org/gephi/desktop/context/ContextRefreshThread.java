@@ -64,17 +64,22 @@ public class ContextRefreshThread extends TimerTask {
         this.listener = listener;
 
         //Schedule
-        timer.schedule(this, 0, PERIOD);
+        timer.schedule(this, PERIOD, PERIOD);
     }
 
     private void initObserver() {
-        if (observer == null || observer.isDestroyed()) {
+        if (observer == null || observer.isDestroyed() || observer.getGraph().getView() != graphModel.getVisibleView()) {
+            if (observer != null && !observer.isDestroyed()) {
+                observer.destroy();
+            }
             observer = graphModel.createGraphObserver(graphModel.getGraphVisible(), false);
+            listener.run();
         }
     }
 
     @Override
     public void run() {
+
         initObserver();
         if (observer.hasGraphChanged()) {
             listener.run();
@@ -83,6 +88,9 @@ public class ContextRefreshThread extends TimerTask {
 
     public void shutdown() {
         timer.cancel();
+        if (observer != null && !observer.isDestroyed()) {
+            observer.destroy();
+        }
     }
 
     public GraphModel getGraphModel() {

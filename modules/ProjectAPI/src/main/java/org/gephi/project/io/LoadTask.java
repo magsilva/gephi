@@ -79,8 +79,7 @@ import org.openide.util.NbBundle;
  */
 public class LoadTask implements LongTask, Runnable {
 
-    private File file;
-    private GephiReader gephiReader;
+    private final File file;
     private boolean cancel = false;
     private ProgressTicket progressTicket;
 
@@ -102,7 +101,7 @@ public class LoadTask implements LongTask, Runnable {
 
                 if (project != null) {
                     // Enumerate workspaces
-                    List<String> workspaceEntries = new ArrayList<String>();
+                    List<String> workspaceEntries = new ArrayList<>();
                     for (Enumeration<? extends ZipEntry> e = zip.entries(); e.hasMoreElements();) {
                         ZipEntry entry = e.nextElement();
                         if (entry.getName().matches("Workspace_[0-9]*_xml")) {
@@ -177,6 +176,10 @@ public class LoadTask implements LongTask, Runnable {
 
     private ProjectImpl readProject(ZipFile zipFile) throws Exception {
         ZipEntry entry = zipFile.getEntry("Project_xml");
+        if (entry == null) {
+            // Try legacy
+            entry = zipFile.getEntry("Project");
+        }
         if (entry != null) {
             InputStream is = null;
             try {
@@ -192,7 +195,6 @@ public class LoadTask implements LongTask, Runnable {
                     inputFactory.setXMLReporter(new XMLReporter() {
                         @Override
                         public void report(String message, String errorType, Object relatedInformation, Location location) throws XMLStreamException {
-                            System.out.println("Error:" + errorType + ", message : " + message);
                         }
                     });
                     isReader = new InputStreamReader(is, "UTF-8");
@@ -240,7 +242,6 @@ public class LoadTask implements LongTask, Runnable {
                     inputFactory.setXMLReporter(new XMLReporter() {
                         @Override
                         public void report(String message, String errorType, Object relatedInformation, Location location) throws XMLStreamException {
-                            System.out.println("Error:" + errorType + ", message : " + message);
                         }
                     });
                     isReader = new InputStreamReader(is, "UTF-8");
@@ -287,7 +288,6 @@ public class LoadTask implements LongTask, Runnable {
                     inputFactory.setXMLReporter(new XMLReporter() {
                         @Override
                         public void report(String message, String errorType, Object relatedInformation, Location location) throws XMLStreamException {
-                            System.out.println("Error:" + errorType + ", message : " + message);
                         }
                     });
                     isReader = new InputStreamReader(is, "UTF-8");

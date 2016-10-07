@@ -52,14 +52,16 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.gephi.desktop.statistics.api.StatisticsControllerUI;
 import org.gephi.desktop.statistics.api.StatisticsModelUI;
-import org.gephi.statistics.spi.Statistics;
-import org.gephi.statistics.spi.StatisticsBuilder;
+import org.gephi.graph.api.GraphController;
+import org.gephi.graph.api.GraphModel;
 import org.gephi.statistics.api.StatisticsController;
 import org.gephi.statistics.spi.DynamicStatistics;
+import org.gephi.statistics.spi.Statistics;
+import org.gephi.statistics.spi.StatisticsBuilder;
 import org.gephi.statistics.spi.StatisticsUI;
 import org.gephi.ui.components.SimpleHTMLReport;
-import org.gephi.utils.longtask.spi.LongTask;
 import org.gephi.utils.longtask.api.LongTaskListener;
+import org.gephi.utils.longtask.spi.LongTask;
 import org.netbeans.validation.api.ui.ValidationPanel;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -85,7 +87,6 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
     private StatisticsModelUI currentModel;
 
     //Img
-    ;
 
     public StatisticsFrontEnd(StatisticsUI ui) {
         initComponents();
@@ -95,6 +96,7 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
 
         runButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 if (runButton.getText().equals(RUN)) {
                     run();
@@ -106,6 +108,7 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
 
         reportButton.addActionListener(new ActionListener() {
 
+            @Override
             public void actionPerformed(ActionEvent e) {
                 showReport();
             }
@@ -175,14 +178,23 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
     }
 
     private void run() {
+        GraphController graphController = Lookup.getDefault().lookup(GraphController.class);
+        GraphModel graphModel = graphController.getGraphModel();
+
         //Create Statistics
         StatisticsController controller = Lookup.getDefault().lookup(StatisticsController.class);
         StatisticsControllerUI controllerUI = Lookup.getDefault().lookup(StatisticsControllerUI.class);
         StatisticsBuilder builder = controller.getBuilder(statisticsUI.getStatisticsClass());
         currentStatistics = builder.getStatistics();
         if (currentStatistics != null) {
+            if (currentStatistics instanceof DynamicStatistics && !graphModel.isDynamic()) {
+                DialogDisplayer.getDefault().notifyLater(new NotifyDescriptor.Message(NbBundle.getMessage(StatisticsFrontEnd.class, "StatisticsFrontEnd.notDynamicGraph"), NotifyDescriptor.WARNING_MESSAGE));
+                return;
+            }
+
             LongTaskListener listener = new LongTaskListener() {
 
+                @Override
                 public void taskFinished(LongTask task) {
                     showReport();
                 }
@@ -192,13 +204,14 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
                 DynamicSettingsPanel dynamicPanel = new DynamicSettingsPanel();
                 statisticsUI.setup(currentStatistics);
                 dynamicPanel.setup((DynamicStatistics) currentStatistics);
-                
+
                 JPanel dynamicSettingsPanel = DynamicSettingsPanel.createCounpoundPanel(dynamicPanel, settingsPanel);
                 final DialogDescriptor dd = new DialogDescriptor(dynamicSettingsPanel, NbBundle.getMessage(StatisticsTopComponent.class, "StatisticsFrontEnd.settingsPanel.title", builder.getName()));
                 if (dynamicSettingsPanel instanceof ValidationPanel) {
                     ValidationPanel vp = (ValidationPanel) dynamicSettingsPanel;
                     vp.addChangeListener(new ChangeListener() {
 
+                        @Override
                         public void stateChanged(ChangeEvent e) {
                             dd.setValid(!((ValidationPanel) e.getSource()).isProblem());
                         }
@@ -210,28 +223,27 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
                     statisticsUI.unsetup();
                     controllerUI.execute(currentStatistics, listener);
                 }
-            } else {
-                if (settingsPanel != null) {
-                    statisticsUI.setup(currentStatistics);
+            } else if (settingsPanel != null) {
+                statisticsUI.setup(currentStatistics);
 
-                    final DialogDescriptor dd = new DialogDescriptor(settingsPanel, NbBundle.getMessage(StatisticsTopComponent.class, "StatisticsFrontEnd.settingsPanel.title", builder.getName()));
-                    if (settingsPanel instanceof ValidationPanel) {
-                        ValidationPanel vp = (ValidationPanel) settingsPanel;
-                        vp.addChangeListener(new ChangeListener() {
+                final DialogDescriptor dd = new DialogDescriptor(settingsPanel, NbBundle.getMessage(StatisticsTopComponent.class, "StatisticsFrontEnd.settingsPanel.title", builder.getName()));
+                if (settingsPanel instanceof ValidationPanel) {
+                    ValidationPanel vp = (ValidationPanel) settingsPanel;
+                    vp.addChangeListener(new ChangeListener() {
 
-                            public void stateChanged(ChangeEvent e) {
-                                dd.setValid(!((ValidationPanel) e.getSource()).isProblem());
-                            }
-                        });
-                    }
-                    if (DialogDisplayer.getDefault().notify(dd).equals(NotifyDescriptor.OK_OPTION)) {
-                        statisticsUI.unsetup();
-                        controllerUI.execute(currentStatistics, listener);
-                    }
-                } else {
-                    statisticsUI.setup(currentStatistics);
+                        @Override
+                        public void stateChanged(ChangeEvent e) {
+                            dd.setValid(!((ValidationPanel) e.getSource()).isProblem());
+                        }
+                    });
+                }
+                if (DialogDisplayer.getDefault().notify(dd).equals(NotifyDescriptor.OK_OPTION)) {
+                    statisticsUI.unsetup();
                     controllerUI.execute(currentStatistics, listener);
                 }
+            } else {
+                statisticsUI.setup(currentStatistics);
+                controllerUI.execute(currentStatistics, listener);
             }
         }
     }
@@ -248,6 +260,7 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
         if (report != null) {
             SwingUtilities.invokeLater(new Runnable() {
 
+                @Override
                 public void run() {
                     SimpleHTMLReport dialog = new SimpleHTMLReport(WindowManager.getDefault().getMainWindow(), report);
                 }
@@ -255,10 +268,10 @@ public class StatisticsFrontEnd extends javax.swing.JPanel {
         }
     }
 
-    /** This method is called from within the constructor to
-     * initialize the form.
-     * WARNING: Do NOT modify this code. The content of this method is
-     * always regenerated by the Form Editor.
+    /**
+     * This method is called from within the constructor to initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is always
+     * regenerated by the Form Editor.
      */
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents

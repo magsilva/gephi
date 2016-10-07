@@ -41,6 +41,9 @@
  */
 package org.gephi.visualization.bridge;
 
+import java.util.Arrays;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.ColumnObserver;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
@@ -58,6 +61,7 @@ import org.gephi.visualization.model.node.NodeModeler;
 import org.gephi.visualization.octree.Octree;
 import org.gephi.visualization.opengl.AbstractEngine;
 import org.gephi.visualization.text.TextManager;
+import org.gephi.visualization.text.TextModelImpl;
 import org.openide.util.Lookup;
 
 /**
@@ -72,7 +76,12 @@ public class DataBridge implements VizArchitecture {
     protected AbstractEngine engine;
     protected GraphController controller;
     protected TextManager textManager;
+    protected ColumnObserver[] nodeColumnObservers;
+    protected ColumnObserver[] edgeColumnObservers;
+    protected int nodeColumnHashCode;
+    protected int edgeColumnHashCode;
     private VizConfig vizConfig;
+    private TextModelImpl textModel;
     protected GraphLimits limits;
     //Graph
     protected GraphModel graphModel;
@@ -92,7 +101,24 @@ public class DataBridge implements VizArchitecture {
     }
 
     public synchronized boolean updateWorld() {
-        if (observer != null && observer.hasGraphChanged()) {
+        boolean force = false;
+        if ((observer != null && observer.isDestroyed()) || (graphModel != null && graph.getView() != graphModel.getVisibleView())) {
+            if (observer != null && !observer.isDestroyed()) {
+                observer.destroy();
+            }
+            observer = null;
+            if (graphModel != null) {
+                graph.writeLock();
+                graph = graphModel.getGraphVisible();
+                observer = graphModel.createGraphObserver(graph, false);
+                force = true;
+                graph.writeUnlock();
+            }
+        }
+        if (force || (observer != null && (observer.isNew() || observer.hasGraphChanged())) || hasColumnsChanged()) {
+            if (observer.isNew()) {
+                observer.hasGraphChanged();
+            }
             NodeModeler nodeModeler = engine.getNodeModeler();
             EdgeModeler edgeModeler = engine.getEdgeModeler();
             Octree octree = engine.getOctree();
@@ -104,9 +130,10 @@ public class DataBridge implements VizArchitecture {
             int addedEdges = 0;
 
             graph.readLock();
+            boolean isView = !graph.getView().isMainView();
             for (int i = 0; i < nodes.length; i++) {
                 NodeModel node = nodes[i];
-                if (node != null && node.getNode().getStoreId() == -1) {
+                if (node != null && (node.getNode().getStoreId() == -1 || (isView && !graph.contains(node.getNode())))) {
                     //Removed
                     octree.removeNode(node);
                     nodes[i] = null;
@@ -125,11 +152,11 @@ public class DataBridge implements VizArchitecture {
                 } else {
                     model = nodes[id];
                 }
-                textManager.refreshNode(model);
+                textManager.refreshNode(graph, model, textModel);
             }
             for (int i = 0; i < edges.length; i++) {
                 EdgeModel edge = edges[i];
-                if (edge != null && edge.getEdge().getStoreId() == -1) {
+                if (edge != null && (edge.getEdge().getStoreId() == -1 || (isView && !graph.contains(edge.getEdge())))) {
                     //Removed
                     int sourceId = edge.getEdge().getSource().getStoreId();
                     int targetId = edge.getEdge().getTarget().getStoreId();
@@ -138,7 +165,7 @@ public class DataBridge implements VizArchitecture {
                     if (sourceModel != null) {
                         sourceModel.removeEdge(edge);
                     }
-                    if (targetModel != null) {
+                    if (targetModel != null && sourceModel != targetModel) {
                         targetModel.removeEdge(edge);
                     }
                     edges[i] = null;
@@ -156,29 +183,27 @@ public class DataBridge implements VizArchitecture {
                     NodeModel targetModel = nodes[edge.getTarget().getStoreId()];
                     model = edgeModeler.initModel(edge, sourceModel, targetModel);
                     sourceModel.addEdge(model);
-                    targetModel.addEdge(model);
+                    if (targetModel != sourceModel) {
+                        targetModel.addEdge(model);
+                    }
                     edges[id] = model;
                     addedEdges++;
                 } else {
                     model = edges[id];
                 }
-                float w = (float) edge.getWeight();
+                float w = (float) edge.getWeight(graph.getView());
                 model.setWeight(w);
                 minWeight = Math.min(w, minWeight);
                 maxWeight = Math.max(w, maxWeight);
 
-                textManager.refreshEdge(model);
+                textManager.refreshEdge(graph, model, textModel);
             }
-            limits.setMaxWeight(maxWeight);
-            limits.setMinWeight(minWeight);
+            if (!isView) {
+                limits.setMaxWeight(maxWeight);
+                limits.setMinWeight(minWeight);
+            }
 
             graph.readUnlock();
-
-            System.out.println("DATABRIDGE:");
-            System.out.println(" Removed Edges: " + removedEdges);
-            System.out.println(" Added Edges: " + addedEdges);
-            System.out.println(" Removed Nodes: " + removedNodes);
-            System.out.println(" Added Nodes: " + addedNodes);
 
             return true;
         } else if (observer == null) {
@@ -190,19 +215,105 @@ public class DataBridge implements VizArchitecture {
         return false;
     }
 
+    private boolean hasColumnsChanged() {
+        if (nodeColumnObservers != null && edgeColumnObservers != null) {
+            Column[] nodeColumns = textModel.getNodeTextColumns();
+            int nodeCode = Arrays.hashCode(nodeColumns);
+            if (nodeCode != nodeColumnHashCode) {
+                refreshNodeColumns(textModel);
+                return true;
+            }
+            Column[] edgeColumns = textModel.getEdgeTextColumns();
+            int edgeCode = Arrays.hashCode(edgeColumns);
+            if (edgeCode != edgeColumnHashCode) {
+                refreshEdgeColumns(textModel);
+                return true;
+            }
+
+            boolean nodeC = false, edgeC = false;
+            for (ColumnObserver c : nodeColumnObservers) {
+                nodeC = nodeC | c.hasColumnChanged();
+            }
+            for (ColumnObserver c : edgeColumnObservers) {
+                edgeC = edgeC | c.hasColumnChanged();
+            }
+            return nodeC || edgeC;
+        }
+        return false;
+    }
+
     public synchronized void reset() {
         graphModel = controller.getGraphModel();
         if (graphModel != null) {
             graph = graphModel.getGraphVisible();
         }
         if (observer != null && (graphModel == null || observer.getGraph() != graph)) {
-            observer.destroy();
+            if (!observer.isDestroyed()) {
+                observer.destroy();
+            }
             observer = null;
+        }
+        if (nodeColumnObservers != null) {
+            for (ColumnObserver c : nodeColumnObservers) {
+                if (!c.isDestroyed()) {
+                    c.destroy();
+                }
+            }
+            nodeColumnObservers = null;
+        }
+        if (edgeColumnObservers != null) {
+            for (ColumnObserver c : edgeColumnObservers) {
+                if (!c.isDestroyed()) {
+                    c.destroy();
+                }
+            }
+            edgeColumnObservers = null;
         }
         nodes = new NodeModel[10];
         edges = new EdgeModel[10];
+        Octree octree = engine.getOctree();
+        if (!octree.isEmpty()) {
+            octree.clear();
+        }
         if (graphModel != null) {
             observer = graphModel.createGraphObserver(graph, false);
+            textModel = VizController.getInstance().getVizModel().getTextModel();
+            refreshNodeColumns(textModel);
+            refreshEdgeColumns(textModel);
+        }
+    }
+
+    private void refreshNodeColumns(TextModelImpl textModelImpl) {
+        if (nodeColumnObservers != null) {
+            for (ColumnObserver c : nodeColumnObservers) {
+                if (!c.isDestroyed()) {
+                    c.destroy();
+                }
+            }
+            nodeColumnObservers = null;
+        }
+        Column[] nodeColumns = textModelImpl.getNodeTextColumns();
+        nodeColumnHashCode = Arrays.hashCode(nodeColumns);
+        nodeColumnObservers = new ColumnObserver[nodeColumns.length];
+        for (int i = 0; i < nodeColumns.length; i++) {
+            nodeColumnObservers[i] = nodeColumns[i].createColumnObserver(false);
+        }
+    }
+
+    private void refreshEdgeColumns(TextModelImpl textModelImpl) {
+        if (edgeColumnObservers != null) {
+            for (ColumnObserver c : edgeColumnObservers) {
+                if (!c.isDestroyed()) {
+                    c.destroy();
+                }
+            }
+            edgeColumnObservers = null;
+        }
+        Column[] edgeColumns = textModelImpl.getEdgeTextColumns();
+        edgeColumnHashCode = Arrays.hashCode(edgeColumns);
+        edgeColumnObservers = new ColumnObserver[edgeColumns.length];
+        for (int i = 0; i < edgeColumns.length; i++) {
+            edgeColumnObservers[i] = edgeColumns[i].createColumnObserver(false);
         }
     }
 

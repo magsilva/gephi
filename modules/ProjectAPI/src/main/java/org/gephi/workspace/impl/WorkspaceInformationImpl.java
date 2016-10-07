@@ -56,12 +56,13 @@ public class WorkspaceInformationImpl implements WorkspaceInformation {
     public enum Status {
 
         OPEN, CLOSED, INVALID
-    };
+    }
+
     private String name;
     private Status status = Status.CLOSED;
     private String source;
     //Lookup
-    private final transient List<PropertyChangeListener> listeners = new ArrayList<PropertyChangeListener>();
+    private final transient List<PropertyChangeListener> listeners = new ArrayList<>();
 
     public WorkspaceInformationImpl(String name) {
         this.name = name;

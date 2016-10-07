@@ -38,18 +38,30 @@ made subject to such option by the copyright holder.
 Contributor(s):
 
 Portions Copyrighted 2011 Gephi Consortium.
-*/
+ */
 package org.gephi.io.database.drivers;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
  *
  * @author Mathieu Bastian
  */
+@ServiceProvider(service = SQLDriver.class, position = 30)
 public class PostgreSQLDriver implements SQLDriver {
+
+    public PostgreSQLDriver() {
+        try {
+            Class.forName("org.postgresql.Driver");
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(PostgreSQLDriver.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
 
     @Override
     public Connection getConnection(String connectionUrl, String username, String passwd) throws SQLException {

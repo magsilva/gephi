@@ -56,7 +56,7 @@ import org.openide.windows.TopComponent;
 autostore = false)
 @TopComponent.Description(preferredID = "EditToolTopComponent",
 persistenceType = TopComponent.PERSISTENCE_ALWAYS)
-@TopComponent.Registration(mode = "rankingmode", openAtStartup = false, roles = {"overview"})
+@TopComponent.Registration(mode = "rankingmode", openAtStartup = false, roles = {"overview", "datalab"})
 @TopComponent.OpenActionRegistration(displayName = "#CTL_EditToolTopComponent",
 preferredID = "EditToolTopComponent")
 public final class EditToolTopComponent extends TopComponent {
@@ -66,6 +66,7 @@ public final class EditToolTopComponent extends TopComponent {
         setName(NbBundle.getMessage(EditToolTopComponent.class, "CTL_EditToolTopComponent"));
 
         putClientProperty(TopComponent.PROP_MAXIMIZATION_DISABLED, Boolean.TRUE);
+        ((PropertySheet)propertySheet).setDescriptionAreaVisible(false);
 
         Lookup.getDefault().lookup(ProjectController.class).addWorkspaceListener(new WorkspaceListener() {
 

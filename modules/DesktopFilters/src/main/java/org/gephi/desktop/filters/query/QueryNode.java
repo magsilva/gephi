@@ -48,6 +48,9 @@ import org.gephi.filters.api.FilterController;
 import org.gephi.filters.api.FilterLibrary;
 import org.gephi.filters.api.FilterModel;
 import org.gephi.filters.api.Query;
+import org.gephi.filters.spi.Filter;
+import org.gephi.filters.spi.FilterBuilder;
+import org.gephi.filters.spi.FilterProperty;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.nodes.AbstractNode;
@@ -60,7 +63,7 @@ import org.openide.util.NbBundle;
  */
 public class QueryNode extends AbstractNode {
 
-    private Query query;
+    private final Query query;
 
     public QueryNode(Query query) {
         super(new QueryChildren(query));
@@ -128,6 +131,7 @@ public class QueryNode extends AbstractNode {
             super(NbBundle.getMessage(QueryNode.class, "QueryNode.actions.remove"));
         }
 
+        @Override
         public void actionPerformed(ActionEvent e) {
             FilterController filterController = Lookup.getDefault().lookup(FilterController.class);
             if (query.getParent() == null) {
@@ -144,6 +148,7 @@ public class QueryNode extends AbstractNode {
             super(NbBundle.getMessage(QueryNode.class, "QueryNode.actions.rename"));
         }
 
+        @Override
         public void actionPerformed(ActionEvent e) {
             FilterController filterController = Lookup.getDefault().lookup(FilterController.class);
             NotifyDescriptor.InputLine question = new NotifyDescriptor.InputLine(
@@ -165,6 +170,7 @@ public class QueryNode extends AbstractNode {
             super(NbBundle.getMessage(QueryNode.class, "QueryNode.actions.save"));
         }
 
+        @Override
         public void actionPerformed(ActionEvent e) {
             FilterController filterController = Lookup.getDefault().lookup(FilterController.class);
             FilterLibrary filterLibrary = filterController.getModel().getLibrary();
@@ -182,6 +188,7 @@ public class QueryNode extends AbstractNode {
             super(NbBundle.getMessage(QueryNode.class, "QueryNode.actions.duplicate"));
         }
 
+        @Override
         public void actionPerformed(ActionEvent e) {
             FilterController filterController = Lookup.getDefault().lookup(FilterController.class);
             Query ancestor = query;
@@ -189,11 +196,23 @@ public class QueryNode extends AbstractNode {
                 ancestor = ancestor.getParent();
             }
             duplicateQuery(filterController, null, ancestor);
-
         }
 
         private void duplicateQuery(FilterController filterController, Query parent, Query child) {
-            Query childQuery = filterController.createQuery(child.getFilter());
+            Filter filter = child.getFilter();
+            FilterBuilder builder = filterController.getModel().getLibrary().getBuilder(filter);
+
+            Query childQuery = filterController.createQuery(builder);
+
+            Filter filterCopy = childQuery.getFilter();
+            FilterProperty[] filterProperties = filter.getProperties();
+            FilterProperty[] filterCopyProperties = filterCopy.getProperties();
+            if (filterProperties != null && filterCopyProperties != null) {
+                for (int i = 0; i < filterProperties.length; i++) {
+                    filterCopyProperties[i].setValue(filterProperties[i].getValue());
+                }
+            }
+
             if (parent == null) {
                 filterController.add(childQuery);
             } else {

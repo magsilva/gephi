@@ -47,6 +47,7 @@ import java.awt.event.ActionListener;
 import javax.swing.JComponent;
 import javax.swing.UIManager;
 import org.gephi.ui.utils.UIUtils;
+import org.gephi.visualization.VizController;
 
 /**
  *
@@ -94,8 +95,9 @@ public class CollapsePanel extends javax.swing.JPanel {
                     extendButton.setRolloverIcon(new javax.swing.ImageIcon(getClass().getResource("/org/gephi/visualization/component/arrowUp_rollover.png"))); // NOI18N
                 }
                 extendedPanel.setVisible(ext);
-                getParent().validate();
-                getParent().repaint();
+
+                // Workaround for JOGL bug 1274
+                (VizController.getInstance().getDrawable()).reinitWindow();
             }
         });
         if (!extended) {

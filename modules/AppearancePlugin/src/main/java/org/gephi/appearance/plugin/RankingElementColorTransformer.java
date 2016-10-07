@@ -44,6 +44,7 @@ package org.gephi.appearance.plugin;
 import java.awt.Color;
 import java.io.Serializable;
 import java.util.Arrays;
+import org.gephi.appearance.api.Interpolator;
 import org.gephi.appearance.api.Ranking;
 import org.gephi.appearance.spi.RankingTransformer;
 import org.gephi.appearance.spi.Transformer;
@@ -57,11 +58,11 @@ import org.openide.util.lookup.ServiceProvider;
 @ServiceProvider(service = Transformer.class)
 public class RankingElementColorTransformer implements RankingTransformer<Element> {
 
-    protected final LinearGradient linearGradient = new LinearGradient(new Color[]{Color.WHITE, Color.BLACK}, new float[]{0f, 1f});
+    protected final LinearGradient linearGradient = new LinearGradient(new Color[]{new Color(0xEDF8FB), new Color(0x66C2A4), new Color(0x006D2C)}, new float[]{0f, 0.5f, 1f});
 
     @Override
-    public void transform(Element element, Ranking ranking, Number value) {
-        Color color = linearGradient.getValue(ranking.normalize(value));
+    public void transform(Element element, Ranking ranking, Interpolator interpolator, Number value) {
+        Color color = linearGradient.getValue(ranking.normalize(value, interpolator));
         element.setColor(color);
     }
 

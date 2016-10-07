@@ -45,11 +45,11 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
 import javax.xml.stream.events.XMLEvent;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Table;
 import org.gephi.desktop.datalab.AvailableColumnsModel;
 import org.gephi.desktop.datalab.DataTablesModel;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Table;
 import org.gephi.project.api.Workspace;
 import org.gephi.project.spi.WorkspacePersistenceProvider;
 import org.gephi.project.spi.WorkspaceXMLPersistenceProvider;
@@ -94,8 +94,6 @@ public class DataLaboratoryPersistenceProvider implements WorkspaceXMLPersistenc
     }
 
     private void writeDataTablesModel(XMLStreamWriter writer, DataTablesModel dataTablesModel) throws XMLStreamException {
-        writer.writeStartElement(AVAILABLE_COLUMNS);
-
         for (Column column : dataTablesModel.getNodeAvailableColumnsModel().getAvailableColumns()) {
             writer.writeStartElement(NODE_COLUMN);
             writer.writeAttribute("id", String.valueOf(column.getIndex()));
@@ -107,8 +105,6 @@ public class DataLaboratoryPersistenceProvider implements WorkspaceXMLPersistenc
             writer.writeAttribute("id", String.valueOf(column.getIndex()));
             writer.writeEndElement();
         }
-
-        writer.writeEndElement();
     }
 
     private void readDataTablesModel(XMLStreamReader reader, Workspace workspace) throws XMLStreamException {

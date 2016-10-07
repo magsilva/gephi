@@ -49,9 +49,14 @@ import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphFactory;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.TimeRepresentation;
+import org.gephi.graph.api.types.IntervalDoubleMap;
+import org.gephi.graph.api.types.TimestampDoubleMap;
+import org.gephi.io.importer.api.ColumnDraft;
 import org.gephi.io.importer.api.ContainerUnloader;
 import org.gephi.io.importer.api.EdgeDirection;
 import org.gephi.io.importer.api.EdgeDraft;
+import org.gephi.io.importer.api.ElementIdType;
 import org.gephi.io.importer.api.NodeDraft;
 import org.gephi.io.processor.spi.Processor;
 import org.gephi.project.api.ProjectController;
@@ -109,8 +114,20 @@ public class DefaultProcessor extends AbstractProcessor implements Processor {
         Configuration configuration = new Configuration();
         configuration.setTimeRepresentation(container.getTimeRepresentation());
         if (container.getEdgeTypeLabelClass() != null) {
-//            configuration.setEdgeLabelType(container.getEdgeTypeLabelClass());
+            configuration.setEdgeLabelType(container.getEdgeTypeLabelClass());
         }
+        configuration.setNodeIdType(container.getElementIdType().getTypeClass());
+        configuration.setEdgeIdType(container.getElementIdType().getTypeClass());
+
+        ColumnDraft weightColumn = container.getEdgeColumn("weight");
+        if (weightColumn != null && weightColumn.isDynamic()) {
+            if (container.getTimeRepresentation().equals(TimeRepresentation.INTERVAL)) {
+                configuration.setEdgeWeightType(IntervalDoubleMap.class);
+            } else {
+                configuration.setEdgeWeightType(TimestampDoubleMap.class);
+            }
+        }
+
         graphController.getGraphModel(workspace).setConfiguration(configuration);
     }
 
@@ -137,31 +154,40 @@ public class DefaultProcessor extends AbstractProcessor implements Processor {
         int addedNodes = 0, addedEdges = 0;
 
         //Create all nodes
+        ElementIdType elementIdType = container.getElementIdType();
         for (NodeDraft draftNode : container.getNodes()) {
-            String id = draftNode.getId();
+            String idString = draftNode.getId();
+            Object id = toElementId(elementIdType, idString);
             Node node = graph.getNode(id);
+
+            boolean newNode = false;
             if (node == null) {
                 node = factory.newNode(id);
                 addedNodes++;
+                newNode = true;
             }
             flushToNode(draftNode, node);
 
-            graph.addNode(node);
+            if (newNode) {
+                graph.addNode(node);
+            }
 
             Progress.progress(progressTicket);
         }
 
         //Create all edges and push to data structure
         for (EdgeDraft draftEdge : container.getEdges()) {
-            String id = draftEdge.getId();
+            String idString = draftEdge.getId();
+            Object id = toElementId(elementIdType, idString);
             String sourceId = draftEdge.getSource().getId();
             String targetId = draftEdge.getTarget().getId();
-            Node source = graph.getNode(sourceId);
-            Node target = graph.getNode(targetId);
+            Node source = graph.getNode(toElementId(elementIdType, sourceId));
+            Node target = graph.getNode(toElementId(elementIdType, targetId));
             Object type = draftEdge.getType();
             int edgeType = graphModel.addEdgeType(type);
 
             Edge edge = graph.getEdge(source, target, edgeType);
+            boolean newEdge = false;
             if (edge == null) {
                 switch (container.getEdgeDefault()) {
                     case DIRECTED:
@@ -176,10 +202,13 @@ public class DefaultProcessor extends AbstractProcessor implements Processor {
                         break;
                 }
                 addedEdges++;
+                newEdge = true;
             }
             flushToEdge(draftEdge, edge);
 
-            graph.addEdge(edge);
+            if (newEdge) {
+                graph.addEdge(edge);
+            }
 
             Progress.progress(progressTicket);
         }
@@ -188,13 +217,29 @@ public class DefaultProcessor extends AbstractProcessor implements Processor {
         int touchedNodes = container.getNodeCount();
         int touchedEdges = container.getEdgeCount();
         if (touchedNodes != addedNodes || touchedEdges != addedEdges) {
-            Logger.getLogger(getClass().toString()).log(Level.INFO, "# Nodes loaded: {0} ({1} added)", new Object[]{touchedNodes, addedNodes});
-            Logger.getLogger(getClass().toString()).log(Level.INFO, "# Edges loaded: {0} ({1} added)", new Object[]{touchedEdges, addedEdges});
+            Logger.getLogger(getClass().getSimpleName()).log(Level.INFO, "# Nodes loaded: {0} ({1} added)", new Object[]{touchedNodes, addedNodes});
+            Logger.getLogger(getClass().getSimpleName()).log(Level.INFO, "# Edges loaded: {0} ({1} added)", new Object[]{touchedEdges, addedEdges});
         } else {
-            Logger.getLogger(getClass().toString()).log(Level.INFO, "# Nodes loaded: {0}", new Object[]{touchedNodes});
-            Logger.getLogger(getClass().toString()).log(Level.INFO, "# Edges loaded: {0}", new Object[]{touchedEdges});
+            Logger.getLogger(getClass().getSimpleName()).log(Level.INFO, "# Nodes loaded: {0}", new Object[]{touchedNodes});
+            Logger.getLogger(getClass().getSimpleName()).log(Level.INFO, "# Edges loaded: {0}", new Object[]{touchedEdges});
         }
 
         Progress.finish(progressTicket);
+    }
+
+    private Object toElementId(ElementIdType elementIdType, String idString) {
+        Object id;
+        switch (elementIdType) {
+            case INTEGER:
+                id = Integer.parseInt(idString);
+                break;
+            case LONG:
+                id = Long.parseLong(idString);
+                break;
+            default:
+                id = idString;
+                break;
+        }
+        return id;
     }
 }

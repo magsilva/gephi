@@ -45,6 +45,7 @@ package org.gephi.io.importer.impl;
 import java.awt.Color;
 import org.gephi.graph.api.AttributeUtils;
 import org.gephi.graph.api.Interval;
+import org.gephi.graph.api.TimeFormat;
 import org.gephi.graph.api.TimeRepresentation;
 import org.gephi.graph.api.types.IntervalMap;
 import org.gephi.graph.api.types.IntervalSet;
@@ -84,6 +85,16 @@ public abstract class ElementDraftImpl implements ElementDraft {
     abstract ColumnDraft getColumn(String key);
 
     abstract ColumnDraft getColumn(String key, Class type);
+
+    @Override
+    public Double getGraphTimestamp() {
+        return container.getTimestamp();
+    }
+
+    @Override
+    public Interval getGraphInterval() {
+        return container.getInterval();
+    }
 
     @Override
     public String getId() {
@@ -209,7 +220,11 @@ public abstract class ElementDraftImpl implements ElementDraft {
 
     @Override
     public void setValue(String key, Object value) {
-        ColumnDraft column = getColumn(key, value.getClass());
+        Class type = value.getClass();
+        if (AttributeUtils.isDynamicType(type)) {
+            type = AttributeUtils.getStaticType(type);
+        }
+        ColumnDraft column = getColumn(key, type);
         try {
             setAttributeValue(column, value);
         } catch (Exception ex) {
@@ -220,7 +235,7 @@ public abstract class ElementDraftImpl implements ElementDraft {
 
     @Override
     public void setValue(String key, Object value, String dateTime) {
-        setValue(key, value, AttributeUtils.parseDateTime(dateTime));
+        setValue(key, value, container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(dateTime) : AttributeUtils.parseDateTime(dateTime));
     }
 
     @Override
@@ -236,7 +251,18 @@ public abstract class ElementDraftImpl implements ElementDraft {
 
     @Override
     public void setValue(String key, Object value, String startDateTime, String endDateTime) {
-        setValue(key, value, AttributeUtils.parseDateTime(startDateTime), AttributeUtils.parseDateTime(endDateTime));
+        double start, end;
+        if (startDateTime == null || startDateTime.isEmpty() || "-inf".equalsIgnoreCase(startDateTime) || "-infinity".equalsIgnoreCase(startDateTime)) {
+            start = Double.NEGATIVE_INFINITY;
+        } else {
+            start = container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(startDateTime) : AttributeUtils.parseDateTime(startDateTime);
+        }
+        if (endDateTime == null || endDateTime.isEmpty() || "inf".equalsIgnoreCase(endDateTime) || "infinity".equalsIgnoreCase(endDateTime)) {
+            end = Double.POSITIVE_INFINITY;
+        } else {
+            end = container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(endDateTime) : AttributeUtils.parseDateTime(endDateTime);
+        }
+        setValue(key, value, start, end);
     }
 
     @Override
@@ -254,13 +280,31 @@ public abstract class ElementDraftImpl implements ElementDraft {
     @Override
     public void parseAndSetValue(String key, String value) {
         ColumnDraft column = getColumn(key);
-        Object val = AttributeUtils.parse(value, column.getTypeClass());
+        Class typeClass;
+        if (column.isDynamic()) {
+            if (container.getTimeRepresentation().equals(TimeRepresentation.INTERVAL)) {
+                if (container.getInterval() != null) {
+                    parseAndSetValue(key, value, container.getInterval().getLow(), container.getInterval().getHigh());
+                    return;
+                }
+                typeClass = AttributeUtils.getIntervalMapType(column.getTypeClass());
+            } else {
+                if (container.getTimestamp() != null) {
+                    parseAndSetValue(key, value, container.getTimestamp());
+                    return;
+                }
+                typeClass = AttributeUtils.getTimestampMapType(column.getTypeClass());
+            }
+        } else {
+            typeClass = column.getTypeClass();
+        }
+        Object val = AttributeUtils.parse(value, typeClass);
         setValue(key, val);
     }
 
     @Override
     public void parseAndSetValue(String key, String value, String dateTime) {
-        parseAndSetValue(key, value, AttributeUtils.parseDateTime(dateTime));
+        parseAndSetValue(key, value, container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(dateTime) : AttributeUtils.parseDateTime(dateTime));
     }
 
     @Override
@@ -273,15 +317,15 @@ public abstract class ElementDraftImpl implements ElementDraft {
     @Override
     public void parseAndSetValue(String key, String value, String startDateTime, String endDateTime) {
         double start, end;
-        if (startDateTime == null || "-inf".equalsIgnoreCase(startDateTime)) {
+        if (startDateTime == null || startDateTime.isEmpty() || "-inf".equalsIgnoreCase(startDateTime) || "-infinity".equalsIgnoreCase(startDateTime)) {
             start = Double.NEGATIVE_INFINITY;
         } else {
-            start = AttributeUtils.parseDateTime(startDateTime);
+            start = container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(startDateTime) : AttributeUtils.parseDateTime(startDateTime);
         }
-        if (endDateTime == null || "inf".equalsIgnoreCase(endDateTime)) {
+        if (endDateTime == null || endDateTime.isEmpty() || "inf".equalsIgnoreCase(endDateTime) || "infinity".equalsIgnoreCase(endDateTime)) {
             end = Double.POSITIVE_INFINITY;
         } else {
-            end = AttributeUtils.parseDateTime(endDateTime);
+            end = container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(endDateTime) : AttributeUtils.parseDateTime(endDateTime);
         }
         parseAndSetValue(key, value, start, end);
     }
@@ -295,7 +339,7 @@ public abstract class ElementDraftImpl implements ElementDraft {
 
     @Override
     public void addTimestamp(String dateTime) {
-        addTimestamp(AttributeUtils.parseDateTime(dateTime));
+        addTimestamp(container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(dateTime) : AttributeUtils.parseDateTime(dateTime));
     }
 
     @Override
@@ -312,6 +356,23 @@ public abstract class ElementDraftImpl implements ElementDraft {
     }
 
     @Override
+    public void addTimestamps(String timestamps) {
+        if (!container.getTimeRepresentation().equals(TimeRepresentation.TIMESTAMP)) {
+            String message = NbBundle.getMessage(ElementDraftImpl.class, "ElementDraftException_NotTimestampRepresentation", id);
+            container.getReport().logIssue(new Issue(message, Issue.Level.SEVERE));
+            return;
+        }
+        TimestampSet t = (TimestampSet) AttributeUtils.parse(timestamps, TimestampSet.class);
+        if (timeSet == null) {
+            timeSet = t;
+        } else {
+            for (Double d : t.toArray()) {
+                timeSet.add(d);
+            }
+        }
+    }
+
+    @Override
     public TimeSet getTimeSet() {
         return timeSet;
     }
@@ -319,17 +380,34 @@ public abstract class ElementDraftImpl implements ElementDraft {
     @Override
     public void addInterval(String intervalStartDateTime, String intervalEndDateTime) {
         double start, end;
-        if (intervalStartDateTime == null || "-inf".equalsIgnoreCase(intervalStartDateTime)) {
+        if (intervalStartDateTime == null || intervalStartDateTime.isEmpty() || "-inf".equalsIgnoreCase(intervalStartDateTime) || "-infinity".equalsIgnoreCase(intervalStartDateTime)) {
             start = Double.NEGATIVE_INFINITY;
         } else {
-            start = AttributeUtils.parseDateTime(intervalStartDateTime);
+            start = container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(intervalStartDateTime) : AttributeUtils.parseDateTime(intervalStartDateTime);
         }
-        if (intervalEndDateTime == null || "inf".equalsIgnoreCase(intervalEndDateTime)) {
+        if (intervalEndDateTime == null || intervalEndDateTime.isEmpty() || "inf".equalsIgnoreCase(intervalEndDateTime) || "infinity".equalsIgnoreCase(intervalEndDateTime)) {
             end = Double.POSITIVE_INFINITY;
         } else {
-            end = AttributeUtils.parseDateTime(intervalStartDateTime);
+            end = container.getTimeFormat().equals(TimeFormat.DOUBLE) ? Double.parseDouble(intervalEndDateTime) : AttributeUtils.parseDateTime(intervalEndDateTime);
         }
         addInterval(start, end);
+    }
+
+    @Override
+    public void addIntervals(String intervals) {
+        if (!container.getTimeRepresentation().equals(TimeRepresentation.INTERVAL)) {
+            String message = NbBundle.getMessage(ElementDraftImpl.class, "ElementDraftException_NotIntervalRepresentation", id);
+            container.getReport().logIssue(new Issue(message, Issue.Level.SEVERE));
+            return;
+        }
+        IntervalSet s = (IntervalSet) AttributeUtils.parse(intervals, IntervalSet.class);
+        if (timeSet == null) {
+            timeSet = s;
+        } else {
+            for (Interval i : s.toArray()) {
+                timeSet.add(i);
+            }
+        }
     }
 
     @Override
@@ -372,6 +450,15 @@ public abstract class ElementDraftImpl implements ElementDraft {
         int index = ((ColumnDraftImpl) column).getIndex();
         value = AttributeUtils.standardizeValue(value);
         Class typeClass = column.getTypeClass();
+
+        if (column.isDynamic()) {
+            if (container.getTimeRepresentation() == TimeRepresentation.INTERVAL) {
+                typeClass = AttributeUtils.getIntervalMapType(typeClass);
+            } else {
+                typeClass = AttributeUtils.getTimestampMapType(typeClass);
+            }
+        }
+
         if (!value.getClass().equals(typeClass)) {
             throw new RuntimeException("The expected value class was " + typeClass.getSimpleName() + " and " + value.getClass().getSimpleName() + " was found");
         }
@@ -391,7 +478,7 @@ public abstract class ElementDraftImpl implements ElementDraft {
             throw new RuntimeException("The expected value class was " + typeClass.getSimpleName() + " and " + value.getClass().getSimpleName() + " was found");
         }
         if (!column.isDynamic()) {
-            //TODO
+            throw new RuntimeException("Can't set a dynamic value to a static column");
         }
         if (index >= attributes.length) {
             Object[] newArray = new Object[index + 1];
@@ -412,6 +499,9 @@ public abstract class ElementDraftImpl implements ElementDraft {
         Class typeClass = column.getTypeClass();
         if (!value.getClass().equals(typeClass)) {
             throw new RuntimeException("The expected value class was " + typeClass.getSimpleName() + " and " + value.getClass().getSimpleName() + " was found");
+        }
+        if (!column.isDynamic()) {
+            throw new RuntimeException("Can't set a dynamic value to a static column");
         }
         Interval interval = new Interval(start, end);
         if (index >= attributes.length) {

@@ -84,6 +84,7 @@ public class FiltersExplorer extends BeanTreeView {
             this.filterLibrary = model.getLibrary();
             SwingUtilities.invokeLater(new Runnable() {
 
+                @Override
                 public void run() {
                     manager.setRootContext(new CategoryNode(new Utils(), null));
                 }
@@ -92,6 +93,7 @@ public class FiltersExplorer extends BeanTreeView {
             this.filterLibrary = null;
             SwingUtilities.invokeLater(new Runnable() {
 
+                @Override
                 public void run() {
                     manager.setRootContext(new AbstractNode(Children.LEAF) {
 
@@ -108,8 +110,8 @@ public class FiltersExplorer extends BeanTreeView {
 
     protected class Utils implements LookupListener {
 
-        private Lookup.Result<FilterBuilder> lookupResult;
-        private Lookup.Result<Query> lookupResult2;
+        private final Lookup.Result<FilterBuilder> lookupResult;
+        private final Lookup.Result<Query> lookupResult2;
 
         public Utils() {
             lookupResult = filterLibrary.getLookup().lookupResult(FilterBuilder.class);
@@ -118,6 +120,7 @@ public class FiltersExplorer extends BeanTreeView {
             lookupResult2.addLookupListener(this);
         }
 
+        @Override
         public void resultChanged(LookupEvent ev) {
             saveExpandStatus((CategoryNode) manager.getRootContext());
             manager.setRootContext(new CategoryNode(this, null));
@@ -154,7 +157,7 @@ public class FiltersExplorer extends BeanTreeView {
         }
 
         public Object[] getChildren(Category category) {
-            Set<Object> cats = new HashSet<Object>();
+            Set<Object> cats = new HashSet<>();
 
             if (category != null && category.equals(QUERIES)) {
                 for (Query q : filterLibrary.getLookup().lookupAll(Query.class)) {
@@ -191,7 +194,7 @@ public class FiltersExplorer extends BeanTreeView {
                     } else if (cb.getCategory().getParent() != null && cb.getCategory().getParent().getParent() == category) {
                         cats.add(cb.getCategory().getParent());
                     } else if (cb.getCategory() == category) {
-                        for (FilterBuilder fb : cb.getBuilders()) {
+                        for (FilterBuilder fb : cb.getBuilders(uiModel.getWorkspace())) {
                             cats.add(fb);
                         }
                     }
@@ -221,6 +224,7 @@ public class FiltersExplorer extends BeanTreeView {
     private void updateEnabled(final boolean enabled) {
         SwingUtilities.invokeLater(new Runnable() {
 
+            @Override
             public void run() {
                 setRootVisible(enabled);
                 setEnabled(enabled);

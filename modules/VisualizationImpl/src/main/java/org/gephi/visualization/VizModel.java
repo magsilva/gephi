@@ -51,11 +51,15 @@ import javax.swing.SwingUtilities;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.GraphController;
+import org.gephi.graph.api.GraphModel;
 import org.gephi.project.api.Workspace;
 import org.gephi.ui.utils.ColorUtils;
 import org.gephi.visualization.apiimpl.GraphDrawable;
 import org.gephi.visualization.apiimpl.VizConfig;
 import org.gephi.visualization.text.TextModelImpl;
+import org.openide.util.Lookup;
 
 /**
  *
@@ -84,12 +88,15 @@ public class VizModel {
     protected boolean adjustByText;
     protected float edgeScale;
     //Listener
-    protected List<PropertyChangeListener> listeners = new ArrayList<PropertyChangeListener>();
+    protected List<PropertyChangeListener> listeners = new ArrayList<>();
     private boolean defaultModel = false;
 
-    public VizModel() {
+    public VizModel(Workspace workspace) {
         defaultValues();
         limits = VizController.getInstance().getLimits();
+
+        GraphModel gm = Lookup.getDefault().lookup(GraphController.class).getGraphModel(workspace);
+        textModel.setTextColumns(new Column[]{gm.getNodeTable().getColumn("label")}, new Column[]{gm.getEdgeTable().getColumn("label")});
     }
 
     public VizModel(boolean defaultModel) {
@@ -381,8 +388,6 @@ public class VizModel {
     }
 
     public void writeXML(XMLStreamWriter writer) throws XMLStreamException {
-        writer.writeStartElement("vizmodel");
-
         //Fast refreh
         GraphDrawable drawable = VizController.getInstance().getDrawable();
         cameraPosition = Arrays.copyOf(drawable.getCameraLocation(), 3);
@@ -459,8 +464,6 @@ public class VizModel {
         //Float
         writer.writeStartElement("edgeScale");
         writer.writeAttribute("value", String.valueOf(edgeScale));
-        writer.writeEndElement();
-
         writer.writeEndElement();
     }
 }

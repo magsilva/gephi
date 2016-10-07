@@ -47,6 +47,7 @@ import org.gephi.filters.api.FilterLibrary;
 import org.gephi.filters.spi.*;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
+import org.gephi.project.api.Workspace;
 import org.openide.util.NbBundle;
 import org.openide.util.lookup.ServiceProvider;
 
@@ -57,50 +58,62 @@ import org.openide.util.lookup.ServiceProvider;
 @ServiceProvider(service = FilterBuilder.class)
 public class SelfLoopFilterBuilder implements FilterBuilder {
 
+    @Override
     public Category getCategory() {
         return FilterLibrary.EDGE;
     }
 
+    @Override
     public String getName() {
         return NbBundle.getMessage(SelfLoopFilterBuilder.class, "SelfLoopFilterBuilder.name");
     }
 
+    @Override
     public Icon getIcon() {
         return null;
     }
 
+    @Override
     public String getDescription() {
         return NbBundle.getMessage(SelfLoopFilterBuilder.class, "SelfLoopFilterBuilder.description");
     }
 
-    public Filter getFilter() {
+    @Override
+    public Filter getFilter(Workspace workspace) {
         return new SelfLoopFilter();
     }
 
+    @Override
     public JPanel getPanel(Filter filter) {
         return null;
     }
 
+    @Override
     public void destroy(Filter filter) {
     }
 
     public static class SelfLoopFilter implements EdgeFilter {
 
+        @Override
         public boolean init(Graph graph) {
             return true;
         }
 
+        @Override
         public String getName() {
             return NbBundle.getMessage(SelfLoopFilterBuilder.class, "SelfLoopFilterBuilder.name");
         }
 
+        @Override
         public boolean evaluate(Graph graph, Edge edge) {
             return !edge.isSelfLoop();
         }
 
+        @Override
         public void finish() {
         }
 
+        @Override
         public FilterProperty[] getProperties() {
             return null;
         }

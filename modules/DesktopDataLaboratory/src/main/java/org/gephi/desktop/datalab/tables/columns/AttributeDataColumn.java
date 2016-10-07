@@ -41,8 +41,8 @@
  */
 package org.gephi.desktop.datalab.tables.columns;
 
-import org.gephi.graph.api.Column;
 import org.gephi.datalab.api.AttributeColumnsController;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Element;
 
 /**
@@ -104,5 +104,10 @@ public class AttributeDataColumn<T extends Element> implements ElementDataColumn
     @Override
     public boolean isEditable() {
         return attributeColumnsController.canChangeColumnData(column);
+    }
+
+    @Override
+    public Column getColumn() {
+        return column;
     }
 }

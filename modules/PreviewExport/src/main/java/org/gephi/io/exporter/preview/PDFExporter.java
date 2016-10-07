@@ -45,7 +45,6 @@ package org.gephi.io.exporter.preview;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.DocumentException;
-import com.itextpdf.text.FontFactory;
 import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Rectangle;
 import com.itextpdf.text.pdf.PdfContentByte;
@@ -59,10 +58,10 @@ import org.gephi.preview.api.PreviewController;
 import org.gephi.preview.api.PreviewProperties;
 import org.gephi.preview.api.PreviewProperty;
 import org.gephi.preview.api.RenderTarget;
+import org.gephi.project.api.Workspace;
 import org.gephi.utils.longtask.spi.LongTask;
 import org.gephi.utils.progress.Progress;
 import org.gephi.utils.progress.ProgressTicket;
-import org.gephi.project.api.Workspace;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
@@ -87,6 +86,7 @@ public class PDFExporter implements ByteExporter, VectorExporter, LongTask {
     private boolean landscape = false;
     private Rectangle pageSize = PageSize.A4;
 
+    @Override
     public boolean execute() {
         Progress.start(progress);
 
@@ -189,10 +189,12 @@ public class PDFExporter implements ByteExporter, VectorExporter, LongTask {
         this.pageSize = pageSize;
     }
 
+    @Override
     public void setOutputStream(OutputStream stream) {
         this.stream = stream;
     }
 
+    @Override
     public void setWorkspace(Workspace workspace) {
         this.workspace = workspace;
     }
@@ -201,10 +203,12 @@ public class PDFExporter implements ByteExporter, VectorExporter, LongTask {
         this.landscape = landscape;
     }
 
+    @Override
     public Workspace getWorkspace() {
         return workspace;
     }
 
+    @Override
     public boolean cancel() {
         this.cancel = true;
         if (target instanceof LongTask) {
@@ -213,6 +217,7 @@ public class PDFExporter implements ByteExporter, VectorExporter, LongTask {
         return true;
     }
 
+    @Override
     public void setProgressTicket(ProgressTicket progressTicket) {
         this.progress = progressTicket;
     }

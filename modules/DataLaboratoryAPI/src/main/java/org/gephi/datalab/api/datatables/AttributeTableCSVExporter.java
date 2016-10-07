@@ -50,16 +50,14 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import org.gephi.datalab.api.AttributeColumnsController;
+import org.gephi.graph.api.AttributeUtils;
 import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Table;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Element;
 import org.gephi.graph.api.Graph;
+import org.gephi.graph.api.Table;
 import org.gephi.graph.api.TimeFormat;
-import org.gephi.graph.api.types.IntervalMap;
-import org.gephi.graph.api.types.IntervalSet;
-import org.gephi.graph.api.types.TimestampMap;
-import org.gephi.graph.api.types.TimestampSet;
+import org.joda.time.DateTimeZone;
 import org.openide.util.Lookup;
 
 public class AttributeTableCSVExporter {
@@ -153,9 +151,10 @@ public class AttributeTableCSVExporter {
         }
         
         TimeFormat timeFormat = graph.getModel().getTimeFormat();
+        DateTimeZone timeZone = graph.getModel().getTimeZone();
 
         if (columnIndexesToExport == null) {
-            List<Integer> columnIndexesToExportList = new ArrayList<Integer>();
+            List<Integer> columnIndexesToExportList = new ArrayList<>();
             
             //Add special columns for edges table:
             if(isEdgeTable){
@@ -185,7 +184,11 @@ public class AttributeTableCSVExporter {
             } else if (columnIndex == FAKE_COLUMN_EDGE_TYPE) {
                 writer.write("Type");
             } else {
-                writer.write(table.getColumn(columnIndex).getTitle(), true);
+                //Use the title only if it's the same as the id (case insensitive):
+                String columnId = table.getColumn(columnIndex).getId();
+                String columnTitle = table.getColumn(columnIndex).getId();
+                String columnHeader = columnId.equalsIgnoreCase(columnTitle) ? columnTitle : columnId;
+                writer.write(columnHeader, true);
             }
 
         }
@@ -209,17 +212,7 @@ public class AttributeTableCSVExporter {
                 }
 
                 if (value != null) {
-                    if(value instanceof TimestampSet){
-                        text = ((TimestampSet) value).toString(timeFormat);
-                    } else if(value instanceof TimestampMap){
-                        text = ((TimestampMap) value).toString(timeFormat);
-                    } else if(value instanceof IntervalSet){
-                        text = ((IntervalSet) value).toString(timeFormat);
-                    } else if(value instanceof IntervalMap){
-                        text = ((IntervalMap) value).toString(timeFormat);
-                    } else {
-                        text = value.toString();
-                    }
+                    text = AttributeUtils.print(value, timeFormat, timeZone);
                 } else {
                     text = "";
                 }

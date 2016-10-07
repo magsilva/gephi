@@ -41,11 +41,16 @@ Portions Copyrighted 2011 Gephi Consortium.
  */
 package org.gephi.desktop.layout;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -70,7 +75,7 @@ import org.w3c.dom.NodeList;
  */
 public class LayoutPresetPersistence {
 
-    private Map<String, List<Preset>> presets = new HashMap<String, List<Preset>>();
+    private Map<String, List<Preset>> presets = new HashMap<>();
 
     public LayoutPresetPersistence() {
         loadPresets();
@@ -79,16 +84,14 @@ public class LayoutPresetPersistence {
     public void savePreset(String name, Layout layout) {
         Preset preset = addPreset(new Preset(name, layout));
 
+        FileOutputStream fos = null;
         try {
             //Create file if dont exist
             FileObject folder = FileUtil.getConfigFile("layoutpresets");
             if (folder == null) {
                 folder = FileUtil.getConfigRoot().createFolder("layoutpresets");
             }
-            FileObject presetFile = folder.getFileObject(name, "xml");
-            if (presetFile == null) {
-                presetFile = folder.createData(name, "xml");
-            }
+            File presetFile = new File(FileUtil.toFile(folder), name + ".xml");
 
             //Create doc
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -101,14 +104,22 @@ public class LayoutPresetPersistence {
             preset.writeXML(document);
 
             //Write XML file
+            fos = new FileOutputStream(presetFile);
             Source source = new DOMSource(document);
-            Result result = new StreamResult(FileUtil.toFile(presetFile));
+            Result result = new StreamResult(fos);
             Transformer transformer = TransformerFactory.newInstance().newTransformer();
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             transformer.transform(source, result);
         } catch (Exception e) {
-            e.printStackTrace();
+            Logger.getLogger("").log(Level.SEVERE, "Error while writing preset file", e);
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (IOException ex) {
+                }
+            }
         }
     }
 
@@ -119,8 +130,8 @@ public class LayoutPresetPersistence {
                         || p.getProperty().getName().equalsIgnoreCase(preset.propertyNames.get(i))) {//Also compare with property name to maintain compatibility with old presets
                     try {
                         p.getProperty().setValue(preset.propertyValues.get(i));
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
+                    } catch (Exception e) {
+                        Logger.getLogger("").log(Level.SEVERE, "Error while setting preset property", e);
                     }
                 }
             }
@@ -143,8 +154,8 @@ public class LayoutPresetPersistence {
                         Document document = builder.parse(stream);
                         Preset preset = new Preset(document);
                         addPreset(preset);
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
+                    } catch (Exception e) {
+                        Logger.getLogger("").log(Level.SEVERE, "Error while reading preset file", e);
                     }
                 }
             }
@@ -154,7 +165,7 @@ public class LayoutPresetPersistence {
     private Preset addPreset(Preset preset) {
         List<Preset> layoutPresets = presets.get(preset.layoutClassName);
         if (layoutPresets == null) {
-            layoutPresets = new ArrayList<Preset>();
+            layoutPresets = new ArrayList<>();
             presets.put(preset.layoutClassName, layoutPresets);
         }
         for (Preset p : layoutPresets) {
@@ -168,8 +179,8 @@ public class LayoutPresetPersistence {
 
     protected static class Preset {
 
-        private List<String> propertyNames = new ArrayList<String>();
-        private List<Object> propertyValues = new ArrayList<Object>();
+        private List<String> propertyNames = new ArrayList<>();
+        private List<Object> propertyValues = new ArrayList<>();
         private String layoutClassName;
         private String name;
 

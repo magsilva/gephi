@@ -42,12 +42,14 @@
 package org.gephi.filters.plugin.partition;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.swing.Icon;
 import javax.swing.JPanel;
-import org.gephi.data.attributes.api.AttributeColumn;
-import org.gephi.data.attributes.api.AttributeUtils;
+import org.gephi.appearance.api.AppearanceController;
+import org.gephi.appearance.api.AppearanceModel;
+import org.gephi.appearance.api.Partition;
 import org.gephi.filters.api.FilterLibrary;
 import org.gephi.filters.spi.Category;
 import org.gephi.filters.spi.CategoryBuilder;
@@ -56,17 +58,14 @@ import org.gephi.filters.spi.Filter;
 import org.gephi.filters.spi.FilterBuilder;
 import org.gephi.filters.spi.FilterProperty;
 import org.gephi.filters.spi.NodeFilter;
+import org.gephi.graph.api.AttributeUtils;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
-import org.gephi.graph.api.HierarchicalGraph;
 import org.gephi.graph.api.Node;
-import org.gephi.partition.api.EdgePartition;
-import org.gephi.partition.api.NodePartition;
-import org.gephi.partition.api.Part;
-import org.gephi.partition.api.Partition;
-import org.gephi.partition.api.PartitionController;
+import org.gephi.project.api.Workspace;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -84,24 +83,36 @@ public class PartitionBuilder implements CategoryBuilder {
             null,
             FilterLibrary.ATTRIBUTES);
 
+    @Override
     public Category getCategory() {
         return PARTITION;
     }
 
-    public FilterBuilder[] getBuilders() {
-        List<FilterBuilder> builders = new ArrayList<FilterBuilder>();
-        PartitionController pc = Lookup.getDefault().lookup(PartitionController.class);
-        if (pc.getModel() != null) {
-            pc.refreshPartitions();
-            NodePartition[] nodePartitions = pc.getModel().getNodePartitions();
-            EdgePartition[] edgePartitions = pc.getModel().getEdgePartitions();
-            for (NodePartition np : nodePartitions) {
-                PartitionFilterBuilder builder = new PartitionFilterBuilder(np.getColumn(), np);
-                builders.add(builder);
+    @Override
+    public FilterBuilder[] getBuilders(Workspace workspace) {
+        List<FilterBuilder> builders = new ArrayList<>();
+        GraphModel gm = Lookup.getDefault().lookup(GraphController.class).getGraphModel(workspace);
+        Graph graph = gm.getGraph();
+        AppearanceModel am = Lookup.getDefault().lookup(AppearanceController.class).getModel(workspace);
+
+        //Force refresh
+        am.getNodeFunctions(graph);
+
+        for (Column nodeCol : gm.getNodeTable()) {
+            if (!nodeCol.isProperty()) {
+                if (am.getNodePartition(graph, nodeCol) != null) {
+                    PartitionFilterBuilder builder = new PartitionFilterBuilder(nodeCol, am);
+                    builders.add(builder);
+                }
             }
-            for (EdgePartition ep : edgePartitions) {
-                PartitionFilterBuilder builder = new PartitionFilterBuilder(ep.getColumn(), ep);
-                builders.add(builder);
+        }
+
+        for (Column edgeCol : gm.getEdgeTable()) {
+            if (!edgeCol.isProperty()) {
+                if (am.getEdgePartition(graph, edgeCol) != null) {
+                    PartitionFilterBuilder builder = new PartitionFilterBuilder(edgeCol, am);
+                    builders.add(builder);
+                }
             }
         }
 
@@ -110,43 +121,46 @@ public class PartitionBuilder implements CategoryBuilder {
 
     private static class PartitionFilterBuilder implements FilterBuilder {
 
-        private final AttributeColumn column;
-        private Partition partition;
+        private final Column column;
+        private final AppearanceModel model;
 
-        public PartitionFilterBuilder(AttributeColumn column, NodePartition partition) {
+        public PartitionFilterBuilder(Column column, AppearanceModel model) {
             this.column = column;
-            this.partition = partition;
+            this.model = model;
         }
 
-        public PartitionFilterBuilder(AttributeColumn column, EdgePartition partition) {
-            this.column = column;
-            this.partition = partition;
-        }
-
+        @Override
         public Category getCategory() {
             return PARTITION;
         }
 
+        @Override
         public String getName() {
-            return column.getTitle() + " (" + (partition instanceof NodePartition ? "Node" : "Edge") + ")";
+            return column.getTitle() + " (" + (AttributeUtils.isNodeColumn(column)
+                    ? NbBundle.getMessage(PartitionFilterBuilder.class, "PartitionFilterBuilder.name.node")
+                    : NbBundle.getMessage(PartitionFilterBuilder.class, "PartitionFilterBuilder.name.edge")) + ")";
         }
 
+        @Override
         public Icon getIcon() {
             return null;
         }
 
+        @Override
         public String getDescription() {
             return NbBundle.getMessage(PartitionBuilder.class, "PartitionBuilder.description");
         }
 
-        public PartitionFilter getFilter() {
-            if (AttributeUtils.getDefault().isNodeColumn(column)) {
-                return new NodePartitionFilter(partition);
+        @Override
+        public PartitionFilter getFilter(Workspace workspace) {
+            if (AttributeUtils.isNodeColumn(column)) {
+                return new NodePartitionFilter(column, model);
             } else {
-                return new EdgePartitionFilter(partition);
+                return new EdgePartitionFilter(column, model);
             }
         }
 
+        @Override
         public JPanel getPanel(Filter filter) {
             PartitionUI ui = Lookup.getDefault().lookup(PartitionUI.class);
             if (ui != null) {
@@ -155,109 +169,114 @@ public class PartitionBuilder implements CategoryBuilder {
             return null;
         }
 
+        @Override
         public void destroy(Filter filter) {
         }
     }
 
     public static class NodePartitionFilter extends PartitionFilter implements NodeFilter {
 
-        public NodePartitionFilter(Partition partition) {
-            super(partition);
+        public NodePartitionFilter(Column column, AppearanceModel model) {
+            super(column, model);
+        }
+
+        @Override
+        public boolean init(Graph graph) {
+            partition = appearanceModel.getNodePartition(graph.getModel().getGraph(), column);
+            return partition != null;
         }
     }
 
     public static class EdgePartitionFilter extends PartitionFilter implements EdgeFilter {
 
-        public EdgePartitionFilter(Partition partition) {
-            super(partition);
+        public EdgePartitionFilter(Column column, AppearanceModel model) {
+            super(column, model);
+        }
+
+        @Override
+        public boolean init(Graph graph) {
+            partition = appearanceModel.getEdgePartition(graph.getModel().getGraph(), column);
+            return partition != null;
         }
     }
 
     public static abstract class PartitionFilter implements Filter {
 
+        protected static final Object NULL = new Object();
+        protected AppearanceModel appearanceModel;
+        protected Column column;
         protected Partition partition;
         protected FilterProperty[] filterProperties;
-        protected List<Part> parts;
+        protected Set<Object> parts;
 
-        public PartitionFilter(Partition partition) {
-            this.partition = partition;
-            parts = new ArrayList<Part>();
+        public PartitionFilter(Column column, AppearanceModel model) {
+            this.column = column;
+            this.appearanceModel = model;
+            parts = new HashSet<>();
         }
 
+        @Override
         public String getName() {
-            return NbBundle.getMessage(PartitionBuilder.class, "PartitionBuilder.name") + " (" + partition.getColumn().getTitle() + ")";
-        }
-
-        public boolean init(Graph graph) {
-            HierarchicalGraph hg = (HierarchicalGraph) graph;
-            this.partition = Lookup.getDefault().lookup(PartitionController.class).buildPartition(partition.getColumn(), hg);
-            return true;
+            return NbBundle.getMessage(PartitionBuilder.class, "PartitionBuilder.name") + " (" + column.getTitle() + ")";
         }
 
         public boolean evaluate(Graph graph, Node node) {
-            Object value = node.getNodeData().getAttributes().getValue(partition.getColumn().getIndex());
-            int size = parts.size();
-            for (int i = 0; i < size; i++) {
-                Object obj = parts.get(i).getValue();
-                if (obj == null && value == null) {
-                    return true;
-                } else if (obj != null && value != null && obj.equals(value)) {
-                    return true;
-                }
+            Object value = partition.getValue(node, graph);
+            if (value == null) {
+                return parts.contains(NULL);
+            } else {
+                return parts.contains(value);
             }
-
-            return false;
         }
 
         public boolean evaluate(Graph graph, Edge edge) {
-            Object value = edge.getEdgeData().getAttributes().getValue(partition.getColumn().getIndex());
-            int size = parts.size();
-            for (int i = 0; i < size; i++) {
-                Object obj = parts.get(i).getValue();
-                if (obj == null && value == null) {
-                    return true;
-                } else if (obj != null && value != null && obj.equals(value)) {
-                    return true;
-                }
+            Object value = partition.getValue(edge, graph);
+            if (value == null) {
+                return parts.contains(NULL);
+            } else {
+                return parts.contains(value);
             }
-
-            return false;
         }
 
         public void finish() {
         }
 
-        public void addPart(Part part) {
-            if (!parts.contains(part)) {
-                List<Part> newParts = new ArrayList<Part>(parts.size() + 1);
-                newParts.addAll(parts);
-                newParts.add(part);
-                getProperties()[1].setValue(newParts);
+        public void addPart(Object value) {
+            if (value == null) {
+                if (parts.add(NULL)) {
+                    getProperties()[1].setValue(parts);
+                }
+            } else if (parts.add(value)) {
+                getProperties()[1].setValue(parts);
             }
         }
 
-        public void removePart(Part part) {
-            List<Part> newParts = new ArrayList<Part>(parts);
-            if (newParts.remove(part)) {
-                getProperties()[1].setValue(newParts);
+        public void removePart(Object value) {
+            if (value == null) {
+                if (parts.remove(NULL)) {
+                    getProperties()[1].setValue(parts);
+                }
+            } else if (parts.remove(value)) {
+                getProperties()[1].setValue(parts);
             }
         }
 
         public void unselectAll() {
-            getProperties()[1].setValue(new ArrayList<Part>());
+            getProperties()[1].setValue(new HashSet<>());
         }
 
         public void selectAll() {
-            getProperties()[1].setValue(Arrays.asList(partition.getParts()));
+            getProperties()[1].setValue(new HashSet<>(partition.getValues()));
         }
 
+        @Override
         public FilterProperty[] getProperties() {
             if (filterProperties == null) {
                 filterProperties = new FilterProperty[0];
                 try {
                     filterProperties = new FilterProperty[]{
-                        FilterProperty.createProperty(this, AttributeColumn.class, "column"),
-                        FilterProperty.createProperty(this, List.class, "parts")};
+                        FilterProperty.createProperty(this, Column.class, "column"),
+                        FilterProperty.createProperty(this, Set.class, "parts")};
                 } catch (Exception ex) {
                     Exceptions.printStackTrace(ex);
                 }
@@ -265,36 +284,23 @@ public class PartitionBuilder implements CategoryBuilder {
             return filterProperties;
         }
 
-        public Partition getCurrentPartition() {
-            if (partition.getPartsCount() == 0) {
-                //build partition
-                GraphModel graphModel = Lookup.getDefault().lookup(GraphController.class).getModel();
-                this.partition = Lookup.getDefault().lookup(PartitionController.class).buildPartition(partition.getColumn(), graphModel.getHierarchicalGraphVisible());
-            }
-            return partition;
-        }
-
         public Partition getPartition() {
             return partition;
         }
 
-        public List<Part> getParts() {
+        public Set<Object> getParts() {
             return parts;
         }
 
-        public AttributeColumn getColumn() {
-            return partition.getColumn();
+        public Column getColumn() {
+            return column;
         }
 
-        public void setColumn(AttributeColumn column) {
+        public void setColumn(Column column) {
         }
 
-        public void setParts(List<Part> parts) {
+        public void setParts(Set<Object> parts) {
             this.parts = parts;
-        }
-
-        public void setPartition(Partition partition) {
-            this.partition = partition;
         }
     }
 }

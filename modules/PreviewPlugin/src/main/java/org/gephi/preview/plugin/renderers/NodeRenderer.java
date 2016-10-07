@@ -85,6 +85,23 @@ public class NodeRenderer implements Renderer {
         }
     }
 
+    @Override
+    public CanvasSize getCanvasSize(
+            final Item item,
+            final PreviewProperties properties) {
+        final float x = item.getData(NodeItem.X);
+        final float y = item.getData(NodeItem.Y);
+        final float s = (Float) item.getData(NodeItem.SIZE)
+                + properties.getFloatValue(PreviewProperty.NODE_BORDER_WIDTH);
+        final float r = s / 2F;
+        final int intS = Math.round(s);
+        return new CanvasSize(
+                Math.round(x - r),
+                Math.round(y - r),
+                intS,
+                intS);
+    }
+
     public void renderG2D(Item item, G2DTarget target, PreviewProperties properties) {
         //Params
         Float x = item.getData(NodeItem.X);
@@ -94,6 +111,9 @@ public class NodeRenderer implements Renderer {
         Color borderColor = ((DependantColor) properties.getValue(PreviewProperty.NODE_BORDER_COLOR)).getColor(color);
         float borderSize = properties.getFloatValue(PreviewProperty.NODE_BORDER_WIDTH);
         int alpha = (int) ((properties.getFloatValue(PreviewProperty.NODE_OPACITY) / 100f) * 255f);
+        if (alpha < 0) {
+            alpha = 0;
+        }
         if (alpha > 255) {
             alpha = 255;
         }
@@ -138,7 +158,9 @@ public class NodeRenderer implements Renderer {
         nodeElem.setAttribute("fill-opacity", "" + alpha);
         if (borderSize > 0) {
             nodeElem.setAttribute("stroke", target.toHexString(borderColor));
-            nodeElem.setAttribute("stroke-width", new Float(borderSize * target.getScaleRatio()).toString());
+            nodeElem.setAttribute(
+                    "stroke-width",
+                    Float.toString(borderSize * target.getScaleRatio()));
             nodeElem.setAttribute("stroke-opacity", "" + alpha);
         }
         target.getTopElement(SVGTarget.TOP_NODES).appendChild(nodeElem);

@@ -45,17 +45,18 @@ import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
-import org.gephi.graph.api.AttributeUtils;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Origin;
-import org.gephi.graph.api.Table;
 import org.gephi.datalab.api.AttributeColumnsController;
 import org.gephi.datalab.api.AttributeColumnsMergeStrategiesController;
+import org.gephi.graph.api.AttributeUtils;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Element;
-import org.gephi.graph.api.types.TimestampMap;
-import org.gephi.graph.api.types.TimestampSet;
-import org.gephi.graph.impl.GraphStoreConfiguration;
+import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Origin;
+import org.gephi.graph.api.Table;
+import org.gephi.graph.api.TimeFormat;
+import org.gephi.graph.api.types.IntervalSet;
 import org.gephi.utils.StatisticsUtils;
+import org.joda.time.DateTimeZone;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.ServiceProvider;
 
@@ -88,19 +89,24 @@ public class AttributeColumnsMergeStrategiesControllerImpl implements AttributeC
         Object value;
         StringBuilder sb;
         final int columnsCount = columnsToMerge.length;
+        
+        GraphModel graphModel = table.getGraph().getModel();
+        TimeFormat timeFormat = graphModel.getTimeFormat();
+        DateTimeZone timeZone = graphModel.getTimeZone();
 
         for (Element row : ac.getTableAttributeRows(table)) {
             sb = new StringBuilder();
             for (int i = 0; i < columnsCount; i++) {
                 value = row.getAttribute(columnsToMerge[i]);
                 if (value != null) {
-                    sb.append(value.toString());
+                    sb.append(AttributeUtils.print(value, timeFormat, timeZone));
                     if (i < columnsCount - 1) {
                         sb.append(separator);
                     }
                 }
             }
-            row.setAttribute(newColumn, sb.toString());
+            
+            ac.setAttributeValue(sb.toString(), row, newColumn);
         }
 
         return newColumn;
@@ -171,7 +177,6 @@ public class AttributeColumnsMergeStrategiesControllerImpl implements AttributeC
         AttributeColumnsController ac = Lookup.getDefault().lookup(AttributeColumnsController.class);
         Object value;
         double start, end;
-        TimestampMap timeInterval;
         for (Element row : ac.getTableAttributeRows(table)) {
             if (startColumnIndex != -1) {
                 value = row.getAttribute(startColumn);
@@ -213,9 +218,10 @@ public class AttributeColumnsMergeStrategiesControllerImpl implements AttributeC
                 }
             }
             
-            row.addTimestamp(start);
-            row.addTimestamp(end);
+            IntervalSet timeInterval = new IntervalSet(new double[]{start, end});
+            row.setAttribute(timeIntervalColumn, timeInterval);
         }
+        
         return timeIntervalColumn;
     }
 
@@ -235,7 +241,6 @@ public class AttributeColumnsMergeStrategiesControllerImpl implements AttributeC
         AttributeColumnsController ac = Lookup.getDefault().lookup(AttributeColumnsController.class);
         Object value;
         double start, end;
-        TimestampMap timeInterval;
         for (Element row : ac.getTableAttributeRows(table)) {
             if (startColumnIndex != -1) {
                 value = row.getAttribute(startColumn);
@@ -261,8 +266,8 @@ public class AttributeColumnsMergeStrategiesControllerImpl implements AttributeC
                 }
             }
             
-            row.addTimestamp(start);
-            row.addTimestamp(end);
+            IntervalSet timeInterval = new IntervalSet(new double[]{start, end});
+            row.setAttribute(timeIntervalColumn, timeInterval);
         }
         return timeIntervalColumn;
     }
@@ -439,9 +444,10 @@ public class AttributeColumnsMergeStrategiesControllerImpl implements AttributeC
 
     /*************Private methods:*************/
     private Column getTimeIntervalColumn(Table table) {
-        Column column = table.getColumn(GraphStoreConfiguration.ELEMENT_TIMESET_INDEX);
+        Column column = table.getColumn("timeset");
         if (column == null) {
-            column = table.addColumn("timestamp", TimestampSet.class, Origin.PROPERTY);
+            //This should not happen with our graphstore usage
+            column = table.addColumn("timeset", "Interval", IntervalSet.class, Origin.PROPERTY, null, true);
         }
         return column;
     }

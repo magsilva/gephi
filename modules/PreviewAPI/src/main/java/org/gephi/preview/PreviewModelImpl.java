@@ -41,8 +41,6 @@
  */
 package org.gephi.preview;
 
-import java.awt.Dimension;
-import java.awt.Point;
 import java.beans.PropertyEditorManager;
 import java.util.*;
 import java.util.Map.Entry;
@@ -57,9 +55,9 @@ import org.gephi.preview.spi.Renderer;
 import org.gephi.preview.types.DependantColor;
 import org.gephi.preview.types.DependantOriginalColor;
 import org.gephi.preview.types.EdgeColor;
-import org.gephi.preview.types.propertyeditors.BasicDependantColorPropertyEditor;
-import org.gephi.preview.types.propertyeditors.BasicDependantOriginalColorPropertyEditor;
-import org.gephi.preview.types.propertyeditors.BasicEdgeColorPropertyEditor;
+import org.gephi.preview.types.editors.BasicDependantColorPropertyEditor;
+import org.gephi.preview.types.editors.BasicDependantOriginalColorPropertyEditor;
+import org.gephi.preview.types.editors.BasicEdgeColorPropertyEditor;
 import org.gephi.project.api.Workspace;
 import org.gephi.utils.Serialization;
 import org.openide.util.Lookup;
@@ -81,9 +79,6 @@ public class PreviewModelImpl implements PreviewModel {
     private PreviewMouseListener[] enabledMouseListeners;
     //Properties
     private PreviewProperties properties;
-    //Dimensions
-    private Dimension dimensions;
-    private Point topLeftPosition;
 
     public PreviewModelImpl(Workspace workspace) {
         this(workspace, null);
@@ -95,8 +90,8 @@ public class PreviewModelImpl implements PreviewModel {
         } else {
             this.previewController = Lookup.getDefault().lookup(PreviewController.class);
         }
-        typeMap = new HashMap<String, List<Item>>();
-        sourceMap = new HashMap<Object, Object>();
+        typeMap = new HashMap<>();
+        sourceMap = new HashMap<>();
         this.workspace = workspace;
 
         initBasicPropertyEditors();
@@ -125,7 +120,7 @@ public class PreviewModelImpl implements PreviewModel {
     private void initManagedRenderers() {
         Renderer[] registeredRenderers = previewController.getRegisteredRenderers();
 
-        Set<String> replacedRenderers = new HashSet<String>();
+        Set<String> replacedRenderers = new HashSet<>();
 
         managedRenderers = new ManagedRenderer[registeredRenderers.length];
         for (int i = 0; i < registeredRenderers.length; i++) {
@@ -141,7 +136,7 @@ public class PreviewModelImpl implements PreviewModel {
     }
 
     private void prepareManagedListeners() {
-        ArrayList<PreviewMouseListener> listeners = new ArrayList<PreviewMouseListener>();
+        ArrayList<PreviewMouseListener> listeners = new ArrayList<>();
 
         for (PreviewMouseListener listener : Lookup.getDefault().lookupAll(PreviewMouseListener.class)) {
             for (Renderer renderer : getManagedEnabledRenderers()) {
@@ -222,7 +217,7 @@ public class PreviewModelImpl implements PreviewModel {
         //Add to type map
         List<Item> typeList = typeMap.get(type);
         if (typeList == null) {
-            typeList = new ArrayList<Item>(items.length);
+            typeList = new ArrayList<>(items.length);
             typeList.addAll(Arrays.asList(items));
             typeMap.put(type, typeList);
 
@@ -233,10 +228,6 @@ public class PreviewModelImpl implements PreviewModel {
                     sourceMap.put(item.getSource(), item);
                 } else if (value instanceof List) {
                     ((List) value).add(item);
-                } else {
-                    List<Item> list = new ArrayList<Item>();
-                    list.add((Item) value);
-                    list.add(item);
                 }
             }
         } else {
@@ -281,21 +272,25 @@ public class PreviewModelImpl implements PreviewModel {
     }
 
     @Override
-    public Dimension getDimensions() {
-        return dimensions;
-    }
-
-    @Override
-    public Point getTopLeftPosition() {
-        return topLeftPosition;
-    }
-
-    public void setDimensions(Dimension dimensions) {
-        this.dimensions = dimensions;
-    }
-
-    public void setTopLeftPosition(Point topLeftPosition) {
-        this.topLeftPosition = topLeftPosition;
+    public CanvasSize getGraphicsCanvasSize() {
+        float x1 = Float.MAX_VALUE;
+        float y1 = Float.MAX_VALUE;
+        float x2 = Float.MIN_VALUE;
+        float y2 = Float.MIN_VALUE;
+        for (Renderer r : getManagedEnabledRenderers()) {
+            for (String type : getItemTypes()) {
+                for (Item item : getItems(type)) {
+                    if (r.isRendererForitem(item, getProperties())) {
+                        CanvasSize cs = r.getCanvasSize(item, getProperties());
+                        x1 = Math.min(x1, cs.getX());
+                        y1 = Math.min(y1, cs.getY());
+                        x2 = Math.max(x2, cs.getMaxX());
+                        y2 = Math.max(y2, cs.getMaxY());
+                    }
+                }
+            }
+        }
+        return new CanvasSize(x1, y1, x2 - x1, y2 - y1);
     }
 
     @Override
@@ -309,12 +304,12 @@ public class PreviewModelImpl implements PreviewModel {
      */
     private void completeManagedRenderersListIfNecessary() {
         if (managedRenderers != null) {
-            Set<String> existing = new HashSet<String>();
+            Set<String> existing = new HashSet<>();
             for (ManagedRenderer mr : managedRenderers) {
                 existing.add(mr.getRenderer().getClass().getName());
             }
 
-            List<ManagedRenderer> completeManagedRenderersList = new ArrayList<ManagedRenderer>();
+            List<ManagedRenderer> completeManagedRenderersList = new ArrayList<>();
             completeManagedRenderersList.addAll(Arrays.asList(managedRenderers));
 
             for (Renderer renderer : previewController.getRegisteredRenderers()) {
@@ -362,8 +357,8 @@ public class PreviewModelImpl implements PreviewModel {
     @Override
     public void setManagedRenderers(ManagedRenderer[] managedRenderers) {
         //Validate no null ManagedRenderers
-        for (int i = 0; i < managedRenderers.length; i++) {
-            if (managedRenderers[i] == null) {
+        for (ManagedRenderer managedRenderer : managedRenderers) {
+            if (managedRenderer == null) {
                 throw new IllegalArgumentException("managedRenderers should not contain null values");
             }
         }
@@ -377,7 +372,7 @@ public class PreviewModelImpl implements PreviewModel {
     @Override
     public Renderer[] getManagedEnabledRenderers() {
         if (managedRenderers != null) {
-            ArrayList<Renderer> renderers = new ArrayList<Renderer>();
+            ArrayList<Renderer> renderers = new ArrayList<>();
             for (ManagedRenderer mr : managedRenderers) {
                 if (mr.isEnabled()) {
                     renderers.add(mr.getRenderer());
@@ -391,8 +386,6 @@ public class PreviewModelImpl implements PreviewModel {
 
     //PERSISTENCE
     public void writeXML(XMLStreamWriter writer) throws XMLStreamException {
-        writer.writeStartElement("previewmodel");
-
         initProperties();
         //Write PreviewProperties:
         for (PreviewProperty property : properties.getProperties()) {
@@ -443,9 +436,6 @@ public class PreviewModelImpl implements PreviewModel {
                 writer.writeEndElement();
             }
         }
-
-
-        writer.writeEndElement();
     }
 
     public void readXML(XMLStreamReader reader) throws XMLStreamException {
@@ -455,8 +445,8 @@ public class PreviewModelImpl implements PreviewModel {
         boolean isSimpleValue = false;
         String simpleValueClass = null;
 
-        List<ManagedRenderer> managedRenderersList = new ArrayList<ManagedRenderer>();
-        Map<String, Renderer> availableRenderers = new HashMap<String, Renderer>();
+        List<ManagedRenderer> managedRenderersList = new ArrayList<>();
+        Map<String, Renderer> availableRenderers = new HashMap<>();
         for (Renderer renderer : Lookup.getDefault().lookupAll(Renderer.class)) {
             availableRenderers.put(renderer.getClass().getName(), renderer);
             Class superClass = renderer.getClass().getSuperclass();

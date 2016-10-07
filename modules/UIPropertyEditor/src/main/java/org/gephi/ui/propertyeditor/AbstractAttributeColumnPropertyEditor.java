@@ -59,12 +59,13 @@ abstract class AbstractAttributeColumnPropertyEditor extends PropertyEditorSuppo
     public enum EditorClass {
 
         NODE, EDGE, NODEEDGE
-    };
+    }
 
     public enum AttributeTypeClass {
 
         ALL, NUMBER, STRING, DYNAMIC_NUMBER, ALL_NUMBER
-    };
+    }
+
     private Column[] columns;
     private Column selectedColumn;
     private final EditorClass editorClass;
@@ -76,7 +77,7 @@ abstract class AbstractAttributeColumnPropertyEditor extends PropertyEditorSuppo
     }
 
     protected Column[] getColumns() {
-        List<Column> cols = new ArrayList<Column>();
+        List<Column> cols = new ArrayList<>();
         GraphModel model = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         if (model != null) {
             if (editorClass.equals(EditorClass.NODE) || editorClass.equals(EditorClass.NODEEDGE)) {

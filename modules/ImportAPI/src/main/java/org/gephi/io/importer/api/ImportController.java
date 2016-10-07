@@ -50,7 +50,7 @@ import org.gephi.io.importer.spi.FileImporter;
 import org.gephi.io.importer.spi.Importer;
 import org.gephi.io.importer.spi.ImporterUI;
 import org.gephi.io.importer.spi.ImporterWizardUI;
-import org.gephi.io.importer.spi.SpigotImporter;
+import org.gephi.io.importer.spi.WizardImporter;
 import org.gephi.io.processor.spi.Processor;
 import org.gephi.project.api.Workspace;
 
@@ -71,7 +71,7 @@ public interface ImportController {
 
     public Container importFile(InputStream stream, FileImporter importer);
 
-    public Container importSpigot(SpigotImporter importer);
+    public Container importWizard(WizardImporter importer);
 
     public FileImporter getFileImporter(File file);
 

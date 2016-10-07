@@ -61,8 +61,8 @@ import org.gephi.io.importer.spi.FileImporterBuilder;
 import org.gephi.io.importer.spi.Importer;
 import org.gephi.io.importer.spi.ImporterUI;
 import org.gephi.io.importer.spi.ImporterWizardUI;
-import org.gephi.io.importer.spi.SpigotImporter;
-import org.gephi.io.importer.spi.SpigotImporterBuilder;
+import org.gephi.io.importer.spi.WizardImporter;
+import org.gephi.io.importer.spi.WizardImporterBuilder;
 import org.gephi.io.processor.spi.Processor;
 import org.gephi.io.processor.spi.Scaler;
 import org.gephi.project.api.Workspace;
@@ -82,7 +82,7 @@ public class ImportControllerImpl implements ImportController {
 
     private final FileImporterBuilder[] fileImporterBuilders;
     private final DatabaseImporterBuilder[] databaseImporterBuilders;
-    private final SpigotImporterBuilder[] spigotImporterBuilders;
+    private final WizardImporterBuilder[] wizardImporterBuilders;
     private final ImporterUI[] uis;
     private final ImporterWizardUI[] wizardUis;
 
@@ -93,8 +93,8 @@ public class ImportControllerImpl implements ImportController {
         //Get DatabaseImporters
         databaseImporterBuilders = Lookup.getDefault().lookupAll(DatabaseImporterBuilder.class).toArray(new DatabaseImporterBuilder[0]);
 
-        //Get Spigots
-        spigotImporterBuilders = Lookup.getDefault().lookupAll(SpigotImporterBuilder.class).toArray(new SpigotImporterBuilder[0]);
+        //Get Wizards
+        wizardImporterBuilders = Lookup.getDefault().lookupAll(WizardImporterBuilder.class).toArray(new WizardImporterBuilder[0]);
 
         //Get UIS
         uis = Lookup.getDefault().lookupAll(ImporterUI.class).toArray(new ImporterUI[0]);
@@ -211,7 +211,7 @@ public class ImportControllerImpl implements ImportController {
 
         try {
             if (importer.execute(container.getLoader())) {
-                if (importer.getReport() != null) {
+                if (importer.getReport() != null && importer.getReport() != report) {
                     report.append(importer.getReport());
                 }
                 report.close();
@@ -226,7 +226,7 @@ public class ImportControllerImpl implements ImportController {
     }
 
     @Override
-    public Container importSpigot(SpigotImporter importer) {
+    public Container importWizard(WizardImporter importer) {
         //Create Container
         final Container container = Lookup.getDefault().lookup(Container.Factory.class).newContainer();
 
@@ -378,7 +378,7 @@ public class ImportControllerImpl implements ImportController {
 
     @Override
     public FileType[] getFileTypes() {
-        ArrayList<FileType> list = new ArrayList<FileType>();
+        ArrayList<FileType> list = new ArrayList<>();
         for (FileImporterBuilder im : fileImporterBuilders) {
             for (FileType ft : im.getFileTypes()) {
                 list.add(ft);

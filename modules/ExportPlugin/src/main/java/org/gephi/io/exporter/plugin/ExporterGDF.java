@@ -317,10 +317,10 @@ public class ExporterGDF implements GraphExporter, CharacterExporter, LongTask {
     }
 
     private Column[] attributesNodeColumns(GraphModel graphModel) {
-        List<Column> cols = new ArrayList<Column>();
+        List<Column> cols = new ArrayList<>();
         if (exportAttributes && graphModel != null) {
             for (Column column : graphModel.getNodeTable()) {
-                if (!isNodeDefaultColumn(column.getId())) {
+                if (!column.isProperty() && !isNodeDefaultColumn(column.getId())) {
                     cols.add(column);
                 }
             }
@@ -329,10 +329,10 @@ public class ExporterGDF implements GraphExporter, CharacterExporter, LongTask {
     }
 
     private Column[] attributesEdgeColumns(GraphModel graphModel) {
-        List<Column> cols = new ArrayList<Column>();
+        List<Column> cols = new ArrayList<>();
         if (exportAttributes && graphModel != null) {
             for (Column column : graphModel.getEdgeTable()) {
-                if (!isEdgeDefaultColumn(column.getId())) {
+                if (!column.isProperty() && !isEdgeDefaultColumn(column.getId())) {
                     cols.add(column);
                 }
             }
@@ -757,7 +757,7 @@ public class ExporterGDF implements GraphExporter, CharacterExporter, LongTask {
     private enum DataTypeGDF {
 
         VARCHAR, BOOL, BOOLEAN, INTEGER, TINYINT, INT, DOUBLE, FLOAT
-    };
+    }
 
     private abstract class NodeColumnsGDF {
 

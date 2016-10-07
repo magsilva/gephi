@@ -44,12 +44,13 @@ package org.gephi.datalab.plugin.manipulators.nodes;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.Icon;
-import org.gephi.graph.api.Column;
 import org.gephi.datalab.api.GraphElementsController;
 import org.gephi.datalab.api.datatables.DataTablesController;
 import org.gephi.datalab.plugin.manipulators.nodes.ui.MergeNodesUI;
 import org.gephi.datalab.spi.ManipulatorUI;
 import org.gephi.datalab.spi.rows.merge.AttributeRowsMergeStrategy;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.Node;
 import org.gephi.graph.api.Table;
@@ -86,7 +87,7 @@ public class MergeNodes extends BasicNodesManipulator {
         selectedNode = clickedNode != null ? clickedNode : nodes[0];
         
         Table nodeTable = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
-        List<Column> columnsList = new ArrayList<Column>();
+        List<Column> columnsList = new ArrayList<>();
         for (Column column : nodeTable) {
             if(!column.isReadOnly()){
                 columnsList.add(column);
@@ -101,8 +102,10 @@ public class MergeNodes extends BasicNodesManipulator {
 
     @Override
     public void execute() {
+        Graph graph = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getGraph();
+        
         GraphElementsController gec = Lookup.getDefault().lookup(GraphElementsController.class);
-        Node newNode = gec.mergeNodes(nodes, selectedNode, columns, mergeStrategies, deleteMergedNodes);
+        Node newNode = gec.mergeNodes(graph, nodes, selectedNode, columns, mergeStrategies, deleteMergedNodes);
         Lookup.getDefault().lookup(DataTablesController.class).setNodeTableSelection(new Node[]{newNode});
         NbPreferences.forModule(MergeNodes.class).putBoolean(DELETE_MERGED_NODES_SAVED_PREFERENCES, deleteMergedNodes);
     }

@@ -49,12 +49,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Table;
 import org.gephi.datalab.api.AttributeColumnsController;
 import org.gephi.datalab.plugin.manipulators.columns.ui.ColumnValuesFrequencyUI;
 import org.gephi.datalab.spi.columns.AttributeColumnsManipulator;
 import org.gephi.datalab.spi.columns.AttributeColumnsManipulatorUI;
+import org.gephi.graph.api.AttributeUtils;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.Table;
 import org.gephi.utils.HTMLEscape;
 import org.gephi.utils.TempDirUtils;
 import org.gephi.utils.TempDirUtils.TempDir;
@@ -119,7 +120,7 @@ public class ColumnValuesFrequency implements AttributeColumnsManipulator {
     public String getReportHTML(Table table, Column column, Map<Object, Integer> valuesFrequencies, JFreeChart pieChart, Dimension dimension) {
         AttributeColumnsController ac = Lookup.getDefault().lookup(AttributeColumnsController.class);
         int totalValuesCount = ac.getTableRowsCount(table);
-        ArrayList<Object> values = new ArrayList<Object>(valuesFrequencies.keySet());
+        ArrayList<Object> values = new ArrayList<>(valuesFrequencies.keySet());
 
         //Try to sort the values when they are comparable. (All objects of the set will have the same type) and not null:
         if (!values.isEmpty() && values.get(0) instanceof Comparable) {
@@ -182,7 +183,7 @@ public class ColumnValuesFrequency implements AttributeColumnsManipulator {
         sb.append("<li>");
         sb.append("<b>");
         if (value != null) {
-            sb.append(HTMLEscape.stringToHTMLString(value.toString()));
+            sb.append(HTMLEscape.stringToHTMLString(AttributeUtils.print(value)));
         } else {
             sb.append("null");
         }
@@ -201,11 +202,11 @@ public class ColumnValuesFrequency implements AttributeColumnsManipulator {
     }
 
     public JFreeChart buildPieChart(final Map<Object, Integer> valuesFrequencies) {
-        final ArrayList<Object> values= new ArrayList<Object>(valuesFrequencies.keySet());
+        final ArrayList<Object> values = new ArrayList<>(valuesFrequencies.keySet());
         DefaultPieDataset pieDataset = new DefaultPieDataset();
 
         for (Object value : values) {
-            pieDataset.setValue(value != null ? "'" + value.toString() + "'" : "null", valuesFrequencies.get(value));
+            pieDataset.setValue(value != null ? "'" + AttributeUtils.print(value) + "'" : "null", valuesFrequencies.get(value));
         }
 
         JFreeChart chart = ChartFactory.createPieChart(NbBundle.getMessage(ColumnValuesFrequency.class, "ColumnValuesFrequency.report.piechart.title"), pieDataset, false, true, false);
@@ -215,10 +216,9 @@ public class ColumnValuesFrequency implements AttributeColumnsManipulator {
     private void writePieChart(final StringBuilder sb, JFreeChart chart, Dimension dimension) throws IOException {
 
         TempDir tempDir = TempDirUtils.createTempDir();
-        String imageFile = "";
         String fileName = "frequencies-pie-chart.png";
         File file = tempDir.createFile(fileName);
-        imageFile = "<center><img src=\"file:" + file.getAbsolutePath() + "\"</img></center>";
+        String imageFile = "<center><img src=\"file:" + file.getAbsolutePath() + "\"</img></center>";
         ChartUtilities.saveChartAsPNG(file, chart, dimension != null ? dimension.width : 1000, dimension != null ? dimension.height : 1000);
 
         sb.append(imageFile);

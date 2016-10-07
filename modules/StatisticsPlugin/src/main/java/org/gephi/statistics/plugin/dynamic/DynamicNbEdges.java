@@ -75,7 +75,7 @@ public class DynamicNbEdges implements DynamicStatistics {
     @Override
     public void execute(GraphModel graphModel) {
         this.graphModel = graphModel;
-        this.counts = new HashMap<Double, Integer>();
+        this.counts = new HashMap<>();
     }
 
     @Override
@@ -124,8 +124,8 @@ public class DynamicNbEdges implements DynamicStatistics {
 
         int count = graph.getEdgeCount();
         
-        graph.setAttribute(NB_EDGES, count, interval.getLow());
-        graph.setAttribute(NB_EDGES, count, interval.getHigh());
+        graphModel.getGraphVisible().setAttribute(NB_EDGES, count, interval.getLow());
+        graphModel.getGraphVisible().setAttribute(NB_EDGES, count, interval.getHigh());
 
         counts.put(interval.getLow(), count);
         counts.put(interval.getHigh(), count);
@@ -135,6 +135,7 @@ public class DynamicNbEdges implements DynamicStatistics {
     public void end() {
     }
 
+    @Override
     public void setBounds(Interval bounds) {
         this.bounds = bounds;
     }

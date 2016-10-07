@@ -55,8 +55,6 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Table;
 import org.gephi.datalab.spi.DialogControls;
 import org.gephi.datalab.spi.Manipulator;
 import org.gephi.datalab.spi.ManipulatorUI;
@@ -74,6 +72,9 @@ import org.gephi.datalab.spi.rows.merge.AttributeRowsMergeStrategy;
 import org.gephi.datalab.spi.rows.merge.AttributeRowsMergeStrategyBuilder;
 import org.gephi.datalab.spi.values.AttributeValueManipulator;
 import org.gephi.datalab.spi.values.AttributeValueManipulatorBuilder;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Table;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.util.Lookup;
@@ -93,7 +94,7 @@ public class DataLaboratoryHelper {
      * @return Array of all NodesManipulator implementations
      */
     public NodesManipulator[] getNodesManipulators() {
-        ArrayList<NodesManipulator> nodesManipulators = new ArrayList<NodesManipulator>();
+        ArrayList<NodesManipulator> nodesManipulators = new ArrayList<>();
         for (NodesManipulatorBuilder nm : Lookup.getDefault().lookupAll(NodesManipulatorBuilder.class)) {
             nodesManipulators.add(nm.getNodesManipulator());
         }
@@ -108,7 +109,7 @@ public class DataLaboratoryHelper {
      * @return Array of all EdgesManipulator implementations
      */
     public EdgesManipulator[] getEdgesManipulators() {
-        ArrayList<EdgesManipulator> edgesManipulators = new ArrayList<EdgesManipulator>();
+        ArrayList<EdgesManipulator> edgesManipulators = new ArrayList<>();
         for (EdgesManipulatorBuilder em : Lookup.getDefault().lookupAll(EdgesManipulatorBuilder.class)) {
             edgesManipulators.add(em.getEdgesManipulator());
         }
@@ -122,7 +123,7 @@ public class DataLaboratoryHelper {
      * @return Array of all GeneralActionsManipulator implementations
      */
     public GeneralActionsManipulator[] getGeneralActionsManipulators() {
-        ArrayList<GeneralActionsManipulator> generalActionsManipulators = new ArrayList<GeneralActionsManipulator>();
+        ArrayList<GeneralActionsManipulator> generalActionsManipulators = new ArrayList<>();
         generalActionsManipulators.addAll(Lookup.getDefault().lookupAll(GeneralActionsManipulator.class));
         sortManipulators(generalActionsManipulators);
         return generalActionsManipulators.toArray(new GeneralActionsManipulator[0]);
@@ -134,7 +135,7 @@ public class DataLaboratoryHelper {
      * @return Array of all PluginGeneralActionsManipulator implementations
      */
     public PluginGeneralActionsManipulator[] getPluginGeneralActionsManipulators() {
-        ArrayList<PluginGeneralActionsManipulator> pluginGeneralActionsManipulators = new ArrayList<PluginGeneralActionsManipulator>();
+        ArrayList<PluginGeneralActionsManipulator> pluginGeneralActionsManipulators = new ArrayList<>();
         pluginGeneralActionsManipulators.addAll(Lookup.getDefault().lookupAll(PluginGeneralActionsManipulator.class));
         sortManipulators(pluginGeneralActionsManipulators);
         return pluginGeneralActionsManipulators.toArray(new PluginGeneralActionsManipulator[0]);
@@ -147,7 +148,7 @@ public class DataLaboratoryHelper {
      * @return Array of all AttributeColumnsManipulator implementations
      */
     public AttributeColumnsManipulator[] getAttributeColumnsManipulators() {
-        ArrayList<AttributeColumnsManipulator> attributeColumnsManipulators = new ArrayList<AttributeColumnsManipulator>();
+        ArrayList<AttributeColumnsManipulator> attributeColumnsManipulators = new ArrayList<>();
         attributeColumnsManipulators.addAll(Lookup.getDefault().lookupAll(AttributeColumnsManipulator.class));
         sortAttributeColumnsManipulators(attributeColumnsManipulators);
         return attributeColumnsManipulators.toArray(new AttributeColumnsManipulator[0]);
@@ -160,7 +161,7 @@ public class DataLaboratoryHelper {
      * @return Array of all AttributeValueManipulator implementations
      */
     public AttributeValueManipulator[] getAttributeValueManipulators() {
-        ArrayList<AttributeValueManipulator> attributeValueManipulators = new ArrayList<AttributeValueManipulator>();
+        ArrayList<AttributeValueManipulator> attributeValueManipulators = new ArrayList<>();
         for (AttributeValueManipulatorBuilder am : Lookup.getDefault().lookupAll(AttributeValueManipulatorBuilder.class)) {
             attributeValueManipulators.add(am.getAttributeValueManipulator());
         }
@@ -174,7 +175,7 @@ public class DataLaboratoryHelper {
      * @return Array of all AttributeColumnsMergeStrategy implementations
      */
     public AttributeColumnsMergeStrategy[] getAttributeColumnsMergeStrategies() {
-        ArrayList<AttributeColumnsMergeStrategy> strategies = new ArrayList<AttributeColumnsMergeStrategy>();
+        ArrayList<AttributeColumnsMergeStrategy> strategies = new ArrayList<>();
         for (AttributeColumnsMergeStrategyBuilder cs : Lookup.getDefault().lookupAll(AttributeColumnsMergeStrategyBuilder.class)) {
             strategies.add(cs.getAttributeColumnsMergeStrategy());
         }
@@ -188,7 +189,7 @@ public class DataLaboratoryHelper {
      * @return Array of all AttributeRowsMergeStrategy implementations
      */
     public AttributeRowsMergeStrategy[] getAttributeRowsMergeStrategies() {
-        ArrayList<AttributeRowsMergeStrategy> strategies = new ArrayList<AttributeRowsMergeStrategy>();
+        ArrayList<AttributeRowsMergeStrategy> strategies = new ArrayList<>();
         for (AttributeRowsMergeStrategyBuilder cs : Lookup.getDefault().lookupAll(AttributeRowsMergeStrategyBuilder.class)) {
             strategies.add(cs.getAttributeRowsMergeStrategy());
         }
@@ -330,10 +331,11 @@ public class DataLaboratoryHelper {
      * Prepares the dialog UI of a AttributeColumnsManipulator if it has one and executes the manipulator in a separate
      * Thread when the dialog is accepted or directly if there is no UI.
      * @param m AttributeColumnsManipulator
+     * @param graphModel Graph model of the table
      * @param table Table of the column
      * @param column Column to manipulate
      */
-    public void executeAttributeColumnsManipulator(final AttributeColumnsManipulator m, final Table table, final Column column) {
+    public void executeAttributeColumnsManipulator(final AttributeColumnsManipulator m, final GraphModel graphModel, final Table table, final Column column) {
         if (m.canManipulateColumn(table, column)) {
             SwingUtilities.invokeLater(new Runnable() {
 
@@ -344,7 +346,7 @@ public class DataLaboratoryHelper {
                     if (ui != null) {
                         final JButton okButton = new JButton(NbBundle.getMessage(DataLaboratoryHelper.class, "DataLaboratoryHelper.ui.okButton.text"));
                         DialogControls dialogControls = new DialogControlsImpl(okButton);
-                        ui.setup(m, table, column, dialogControls);
+                        ui.setup(m, graphModel, table, column, dialogControls);
                         JPanel settingsPanel = ui.getSettingsPanel();
                         DialogDescriptor dd = new DialogDescriptor(settingsPanel, NbBundle.getMessage(DataLaboratoryHelper.class, "SettingsPanel.title", ui.getDisplayName()), ui.isModal(), new ActionListener() {
 

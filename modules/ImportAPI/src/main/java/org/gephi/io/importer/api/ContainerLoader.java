@@ -231,6 +231,32 @@ public interface ContainerLoader {
     public void setTimeFormat(TimeFormat timeFormat);
 
     /**
+     * Sets the timestamp for the entire graph. All elements and all dynamic
+     * columns will automatically receive this timestamp when the graph is
+     * processed.
+     *
+     * @param timestamp timestamp
+     */
+    public void setTimestamp(String timestamp);
+
+    /**
+     * Sets the interval for the entire graph. All elements and all dynamic
+     * columns will automatically receive this interval when the graph is
+     * processed.
+     *
+     * @param start interval start
+     * @param end interval end
+     */
+    public void setInterval(String start, String end);
+
+    /**
+     * Sets the type of the id for elements.
+     *
+     * @param type id type
+     */
+    public void setElementIdType(ElementIdType type);
+
+    /**
      * Sets the current time representation, either <code>TIMESTAMP</code> or
      * <code>INTERVAL</code>.
      * <p>
@@ -239,6 +265,14 @@ public interface ContainerLoader {
      * @param timeRepresentation time representation
      */
     public void setTimeRepresentation(TimeRepresentation timeRepresentation);
+
+    /**
+     * Gets the current time representation, either <code>TIMESTAMP</code> or
+     * <code>INTERVAL</code>.
+     * <p>
+     * @return time representation
+     */
+    public TimeRepresentation getTimeRepresentation();
 
     /**
      * Sets the time zone that is used to parse date and time.

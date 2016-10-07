@@ -43,12 +43,12 @@ package org.gephi.io.processor.plugin;
 
 import java.awt.Color;
 import org.gephi.graph.api.AttributeUtils;
-import org.gephi.graph.api.Origin;
-import org.gephi.graph.api.Table;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Element;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.Origin;
+import org.gephi.graph.api.Table;
 import org.gephi.graph.api.TimeRepresentation;
 import org.gephi.graph.api.types.TimeMap;
 import org.gephi.graph.api.types.TimeSet;
@@ -105,7 +105,9 @@ public abstract class AbstractProcessor {
         }
 
         if (nodeDraft.getLabel() != null) {
-            node.setLabel(nodeDraft.getLabel());
+            if (node.getLabel() == null || !nodeDraft.isCreatedAuto()) {
+                node.setLabel(nodeDraft.getLabel());
+            }
         }
 
         if (node.getTextProperties() != null) {
@@ -115,19 +117,24 @@ public abstract class AbstractProcessor {
         if (nodeDraft.getLabelColor() != null && node.getTextProperties() != null) {
             Color labelColor = nodeDraft.getLabelColor();
             node.getTextProperties().setColor(labelColor);
+        } else {
+            node.getTextProperties().setColor(new Color(0, 0, 0, 0));
         }
 
         if (nodeDraft.getLabelSize() != -1f && node.getTextProperties() != null) {
             node.getTextProperties().setSize(nodeDraft.getLabelSize());
         }
 
-        node.setX(nodeDraft.getX());
-        node.setY(nodeDraft.getY());
-        node.setZ(nodeDraft.getZ());
+        if ((nodeDraft.getX() != 0 || nodeDraft.getY() != 0 || nodeDraft.getZ() != 0)
+                && (node.x() == 0 && node.y() == 0 && node.z() == 0)) {
+            node.setX(nodeDraft.getX());
+            node.setY(nodeDraft.getY());
+            node.setZ(nodeDraft.getZ());
+        }
 
         if (nodeDraft.getSize() != 0 && !Float.isNaN(nodeDraft.getSize())) {
             node.setSize(nodeDraft.getSize());
-        } else {
+        } else if (node.size() == 0) {
             node.setSize(10f);
         }
 
@@ -136,21 +143,53 @@ public abstract class AbstractProcessor {
             flushTimeSet(nodeDraft.getTimeSet(), node);
         }
 
+        //Graph timeset
+        if (nodeDraft.getGraphTimestamp() != null) {
+            node.addTimestamp(nodeDraft.getGraphTimestamp());
+        } else if (nodeDraft.getGraphInterval() != null) {
+            node.addInterval(nodeDraft.getGraphInterval());
+        }
+
         //Attributes
         flushToElementAttributes(nodeDraft, node);
     }
 
+    protected void flushEdgeWeight(EdgeDraft edgeDraft, Edge edge) {
+        Object val = edgeDraft.getValue("weight");
+        if (val != null && val instanceof TimeMap) {
+            TimeMap valMap = (TimeMap) val;
+
+            TimeMap existingMap = (TimeMap) edge.getAttribute("weight");
+            if (existingMap != null) {
+                Object[] keys = ((TimeMap) val).toKeysArray();
+                Object[] vals = ((TimeMap) val).toValuesArray();
+
+                for (int i = 0; i < keys.length; i++) {
+                    valMap.put(keys[i], ((Number) vals[i]).doubleValue());
+                }
+            }
+
+            edge.setAttribute("weight", val);
+        }
+    }
+
     protected void flushToElementAttributes(ElementDraft elementDraft, Element element) {
         for (ColumnDraft col : elementDraft.getColumns()) {
+            if (elementDraft instanceof EdgeDraft && col.getId().equals("weight")) {
+                continue;
+            }
             Object val = elementDraft.getValue(col.getId());
             if (val != null) {
                 TimeMap existingMap;
                 if (col.isDynamic() && (existingMap = (TimeMap) element.getAttribute(col.getId())) != null && !existingMap.isEmpty()) {
-                    Object[] keys = ((TimeMap) val).toKeysArray();
-                    Object[] vals = ((TimeMap) val).toValuesArray();
+                    TimeMap valMap = (TimeMap) val;
+
+                    Object[] keys = existingMap.toKeysArray();
+                    Object[] vals = existingMap.toValuesArray();
                     for (int i = 0; i < keys.length; i++) {
-                        existingMap.put(keys[i], vals[i]);
+                        valMap.put(keys[i], vals[i]);
                     }
+                    element.setAttribute(col.getId(), valMap);
                 } else {
                     element.setAttribute(col.getId(), val);
                 }
@@ -183,12 +222,24 @@ public abstract class AbstractProcessor {
         if (edgeDraft.getLabelColor() != null && edge.getTextProperties() != null) {
             Color labelColor = edgeDraft.getLabelColor();
             edge.getTextProperties().setColor(labelColor);
+        } else {
+            edge.getTextProperties().setColor(new Color(0, 0, 0, 0));
         }
 
         //Timeset
         if (edgeDraft.getTimeSet() != null) {
             flushTimeSet(edgeDraft.getTimeSet(), edge);
         }
+
+        //Graph timeset
+        if (edgeDraft.getGraphTimestamp() != null) {
+            edge.addTimestamp(edgeDraft.getGraphTimestamp());
+        } else if (edgeDraft.getGraphInterval() != null) {
+            edge.addInterval(edgeDraft.getGraphInterval());
+        }
+
+        //Dynamic edge weight (if any)
+        flushEdgeWeight(edgeDraft, edge);
 
         //Attributes
         flushToElementAttributes(edgeDraft, edge);
@@ -197,12 +248,11 @@ public abstract class AbstractProcessor {
     protected void flushTimeSet(TimeSet timeSet, Element element) {
         TimeSet existingTimeSet = (TimeSet) element.getAttribute("timeset");
         if (existingTimeSet != null && !existingTimeSet.isEmpty()) {
-            for (Object o : timeSet.toArray()) {
+            for (Object o : existingTimeSet.toArray()) {
                 existingTimeSet.add(o);
             }
-        } else {
-            element.setAttribute("timeset", timeSet);
         }
+        element.setAttribute("timeset", timeSet);
     }
 
     public void setWorkspace(Workspace workspace) {

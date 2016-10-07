@@ -42,15 +42,24 @@
 package org.gephi.appearance.plugin.palette;
 
 import java.awt.Color;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.LineNumberReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
+import java.util.prefs.BackingStoreException;
+import java.util.prefs.Preferences;
 import org.openide.util.Exceptions;
+import org.openide.util.NbPreferences;
 
 /**
  *
@@ -66,17 +75,39 @@ public class PaletteManager {
         }
         return instance;
     }
+    protected static String DEFAULT_NODE_NAME = "prefs";
+    public static final String COLORS = "PaletteColors";
     private final static int RECENT_PALETTE_SIZE = 5;
     private final List<Preset> presets;
-    private final Collection<Palette> whiteBackgroundPalette;
-    private final Collection<Palette> blackBackgroundPalette;
+    private final Collection<Palette> defaultPalettes;
     private final LinkedList<Palette> recentPalette;
+    private final Color DEFAULT_COLOR = Color.LIGHT_GRAY;
+    protected String nodeName = null;
 
-    public PaletteManager() {
+    private PaletteManager() {
+        nodeName = "recentpartitionpalettes";
         presets = loadPresets();
-        whiteBackgroundPalette = loadWhiteBackgroundPalettes();
-        blackBackgroundPalette = loadBlackBackgroundPalettes();
-        recentPalette = new LinkedList<Palette>();
+        defaultPalettes = loadDefaultPalettes();
+        recentPalette = new LinkedList<>();
+        retrieve();
+    }
+
+    public Palette randomPalette(int colorCount) {
+        List<Color> colors = new ArrayList<>();
+
+        Random random = new Random();
+        float B = random.nextFloat() * 2 / 5f + 0.6f;
+        float S = random.nextFloat() * 2 / 5f + 0.6f;
+
+        for (int i = 1; i <= colorCount; i++) {
+            float H = i / (float) colorCount;
+            Color c = Color.getHSBColor(H, S, B);
+            colors.add(c);
+        }
+
+        Collections.shuffle(colors);
+
+        return new Palette(colors.toArray(new Color[0]));
     }
 
     public Palette generatePalette(int colorCount) {
@@ -94,7 +125,7 @@ public class PaletteManager {
         } else if (colorCount > 300) {
             quality = 2;
         }
-        Color[] cls = PaletteGenerator.generatePalette(colorCount, quality, preset.toArray());
+        Color[] cls = PaletteGenerator.generatePalette(colorCount, quality, preset != null ? preset.toArray() : null);
         return new Palette(cls);
     }
 
@@ -102,31 +133,30 @@ public class PaletteManager {
         return presets;
     }
 
-    public Collection<Palette> getWhiteBackgroudPalette(int colorCount) {
-        List<Palette> palettes = new ArrayList<Palette>();
-        for (Palette p : whiteBackgroundPalette) {
-            if (p.size() >= colorCount) {
+    public Collection<Palette> getDefaultPalette(int colorCount) {
+        List<Palette> palettes = new ArrayList<>();
+        for (Palette p : defaultPalettes) {
+            if (p.size() == colorCount) {
                 palettes.add(p);
+            } else if (p.size() < colorCount) {
+                Color[] cols = Arrays.copyOf(p.getColors(), colorCount);
+                for (int i = p.size(); i < cols.length; i++) {
+                    cols[i] = DEFAULT_COLOR;
+                }
+                palettes.add(new Palette(cols));
             }
         }
-        return palettes;
-    }
-
-    public Collection<Palette> getBlackBackgroudPalette(int colorCount) {
-        List<Palette> palettes = new ArrayList<Palette>();
-        for (Palette p : blackBackgroundPalette) {
-            if (p.size() >= colorCount) {
-                palettes.add(p);
-            }
-        }
+        Collections.reverse(palettes);
         return palettes;
     }
 
     public void addRecentPalette(Palette palette) {
+        recentPalette.remove(palette);
         if (recentPalette.size() == RECENT_PALETTE_SIZE) {
             recentPalette.removeLast();
         }
         recentPalette.addFirst(palette);
+        store();
     }
 
     public Collection<Palette> getRecentPalettes() {
@@ -134,7 +164,7 @@ public class PaletteManager {
     }
 
     private List<Preset> loadPresets() {
-        List<Preset> presetList = new ArrayList<Preset>();
+        List<Preset> presetList = new ArrayList<>();
         try {
             LineNumberReader reader = new LineNumberReader(new InputStreamReader(PaletteManager.class.getResourceAsStream("palette_presets.csv")));
             reader.readLine();
@@ -158,18 +188,9 @@ public class PaletteManager {
         return presetList;
     }
 
-    private static Collection<Palette> loadWhiteBackgroundPalettes() {
+    private static Collection<Palette> loadDefaultPalettes() {
         try {
-            return loadPalettes("palette_white_background.csv");
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-        return Collections.EMPTY_LIST;
-    }
-
-    private static Collection<Palette> loadBlackBackgroundPalettes() {
-        try {
-            return loadPalettes("palette_black_background.csv");
+            return loadPalettes("palette_default.csv");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
@@ -177,30 +198,23 @@ public class PaletteManager {
     }
 
     private static Collection<Palette> loadPalettes(String fileName) throws IOException {
-        List<List<Color>> palettes = new ArrayList<List<Color>>();
         LineNumberReader reader = new LineNumberReader(new InputStreamReader(PaletteManager.class.getResourceAsStream(fileName)));
-        reader.readLine();
         String line;
-        int maxPalette = 32;
+        List<List<Color>> palettes = new ArrayList<>();
         while ((line = reader.readLine()) != null) {
+            List<Color> palette = new ArrayList<>();
             String[] split = line.split(",");
-            for (int i = 0; i < split.length && i < maxPalette; i++) {
-                String colorStr = split[i];
+            for (String colorStr : split) {
                 if (!colorStr.isEmpty()) {
-                    List<Color> palette;
-                    if (palettes.size() <= i) {
-                        palette = new ArrayList<Color>();
-                        palettes.add(palette);
-                    } else {
-                        palette = palettes.get(i);
-                    }
                     palette.add(parseHexColor(colorStr.trim()));
                 }
             }
+            if (!palette.isEmpty()) {
+                palettes.add(palette);
+            }
         }
-        List<Palette> result = new ArrayList<Palette>();
+        List<Palette> result = new ArrayList<>();
         for (List<Color> cls : palettes) {
-            Collections.reverse(cls);
             Palette plt = new Palette(cls.toArray(new Color[0]));
             result.add(plt);
         }
@@ -210,5 +224,76 @@ public class PaletteManager {
     private static Color parseHexColor(String hexColor) {
         int rgb = Integer.parseInt(hexColor.replaceFirst("#", ""), 16);
         return new Color(rgb);
+    }
+
+    private void retrieve() {
+        recentPalette.clear();
+        Preferences prefs = getPreferences();
+
+        for (int i = 0; i < RECENT_PALETTE_SIZE; i++) {
+            byte[] cols = prefs.getByteArray(COLORS + i, null);
+            if (cols != null) {
+                try {
+                    Color[] colors = deserializeColors(cols);
+                    recentPalette.addLast(new Palette(colors));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    private void store() {
+        Preferences prefs = getPreferences();
+
+        // clear the backing store
+        try {
+            prefs.clear();
+        } catch (BackingStoreException ex) {
+        }
+
+        int i = 0;
+        for (Palette palette : recentPalette) {
+            try {
+                prefs.putByteArray(COLORS + i, serializeColors(palette.getColors()));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            i++;
+        }
+    }
+
+    private byte[] serializeColors(Color[] colors) throws Exception {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream out = new ObjectOutputStream(bos);
+        out.writeObject(colors);
+        out.close();
+        return bos.toByteArray();
+    }
+
+    private Color[] deserializeColors(byte[] colors) throws Exception {
+        ByteArrayInputStream bis = new ByteArrayInputStream(colors);
+        ObjectInputStream in = new ObjectInputStream(bis);
+        Color[] array = (Color[]) in.readObject();
+        in.close();
+        return array;
+    }
+
+    /**
+     * Return the backing store Preferences
+     *
+     * @return Preferences
+     */
+    protected final Preferences getPreferences() {
+        String name = DEFAULT_NODE_NAME;
+        if (nodeName != null) {
+            name = nodeName;
+        }
+
+        Preferences prefs = NbPreferences.forModule(this.getClass()).node("options").node(name);
+
+        return prefs;
     }
 }

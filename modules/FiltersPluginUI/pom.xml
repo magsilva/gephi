@@ -4,13 +4,13 @@
     <parent>
         <artifactId>gephi-parent</artifactId>
         <groupId>org.gephi</groupId>
-        <version>0.9-SNAPSHOT</version>
+        <version>0.9.2-SNAPSHOT</version>
         <relativePath>../..</relativePath>
     </parent>
 
     <groupId>org.gephi</groupId>
     <artifactId>filters-plugin-ui</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <version>0.9.2-SNAPSHOT</version>
     <packaging>nbm</packaging>
 
     <name>FiltersPluginUI</name>
@@ -22,7 +22,7 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>data-attributes-api</artifactId>
+            <artifactId>graph-api</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
@@ -32,9 +32,9 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>filters-plugin</artifactId>
         </dependency>
-        <dependency>
+       <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>partition-api</artifactId>
+            <artifactId>appearance-api</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
@@ -60,9 +60,9 @@
             <groupId>org.netbeans.api</groupId>
             <artifactId>org-openide-windows</artifactId>
         </dependency>
-        <dependency>
+       <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>desktop-perspective</artifactId>
+            <artifactId>desktop-banner</artifactId>
         </dependency>
         <dependency>
             <groupId>org.netbeans.api</groupId>

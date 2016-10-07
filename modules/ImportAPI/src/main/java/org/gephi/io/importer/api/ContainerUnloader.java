@@ -41,6 +41,7 @@
  */
 package org.gephi.io.importer.api;
 
+import org.gephi.graph.api.Interval;
 import org.gephi.graph.api.TimeFormat;
 import org.gephi.graph.api.TimeRepresentation;
 import org.gephi.io.processor.spi.Processor;
@@ -72,6 +73,22 @@ public interface ContainerUnloader {
 
     public boolean hasEdgeColumn(String key);
 
+    /**
+     * Returns the node column draft with <code>key</code> as identifier.
+     *
+     * @param key node column key
+     * @return column draft or null if not found
+     */
+    public ColumnDraft getNodeColumn(String key);
+
+    /**
+     * Returns the edge column draft with <code>key</code> as identifier.
+     *
+     * @param key edge column key
+     * @return column draft or null if not found
+     */
+    public ColumnDraft getEdgeColumn(String key);
+
     public Iterable<ColumnDraft> getNodeColumns();
 
     public Iterable<ColumnDraft> getEdgeColumns();
@@ -87,6 +104,12 @@ public interface ContainerUnloader {
     public String getSource();
 
     public Class getEdgeTypeLabelClass();
+
+    public Double getTimestamp();
+
+    public Interval getInterval();
+
+    public ElementIdType getElementIdType();
 
     //PARAMETERS GETTERS
     public boolean allowSelfLoop();

@@ -41,11 +41,12 @@
  */
 package org.gephi.desktop.datalab.tables;
 
-import org.gephi.desktop.datalab.tables.columns.ElementDataColumn;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import javax.swing.table.AbstractTableModel;
+import org.gephi.desktop.datalab.tables.columns.ElementDataColumn;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Element;
 
 /**
@@ -88,7 +89,17 @@ public class ElementsDataTableModel<T extends Element> extends AbstractTableMode
 
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
-        return columns[columnIndex].getValueFor(elements[rowIndex]);
+        try {
+            return columns[columnIndex].getValueFor(elements[rowIndex]);
+        } catch (Exception e) {
+            /**
+             * We need to do this because the JTable might repaint itself 
+             * while datalab still has not detected that the column has been deleted 
+             * (it does so by polling on graph and table observers).
+             * I can't find a better solution...
+             */
+            return null;
+        }
     }
 
     @Override
@@ -120,6 +131,18 @@ public class ElementsDataTableModel<T extends Element> extends AbstractTableMode
             fireTableStructureChanged();//Only firing this event if columns change is useful because JXTable will not reset columns width if there is no change
         } else {
             fireTableDataChanged();
+        }
+    }
+    
+    /**
+     * Column at index or null if it's a fake column.
+     * @return 
+     */
+    public Column getColumnAtIndex(int i){
+        if (i >= 0 && i < columns.length) {
+            return columns[i].getColumn();
+        } else {
+            return null;
         }
     }
 }

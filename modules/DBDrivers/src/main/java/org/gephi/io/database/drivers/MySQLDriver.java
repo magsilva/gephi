@@ -44,13 +44,26 @@ package org.gephi.io.database.drivers;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
  *
  * @author Mathieu Bastian
  */
+@ServiceProvider(service = SQLDriver.class, position = 10)
 public class MySQLDriver implements SQLDriver {
 
+    public MySQLDriver() {
+        try {
+            Class.forName("com.mysql.jdbc.Driver");
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(MySQLDriver.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+    @Override
     public Connection getConnection(String connectionUrl, String username, String passwd) throws SQLException {
         return DriverManager.getConnection(connectionUrl, username, passwd);
     }

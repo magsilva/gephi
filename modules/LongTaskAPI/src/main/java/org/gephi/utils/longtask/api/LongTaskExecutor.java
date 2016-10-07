@@ -44,7 +44,6 @@ package org.gephi.utils.longtask.api;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -328,11 +327,16 @@ public final class LongTaskExecutor {
                 if (task.future != null) {
                     task.future.cancel(interruptCancel);
                 }
+                cancelTimer.cancel();
                 cancelTimer = null;
                 if (task.progress != null) {
                     task.progress.finish();
                 }
                 finished(task);
+
+                if (!inBackground) {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
     }

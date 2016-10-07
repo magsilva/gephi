@@ -47,16 +47,15 @@ import org.apache.batik.transcoder.TranscoderOutput;
 import org.apache.batik.transcoder.svg2svg.SVGTranscoder;
 import org.gephi.io.exporter.spi.CharacterExporter;
 import org.gephi.io.exporter.spi.VectorExporter;
-
 import org.gephi.preview.api.PreviewController;
 import org.gephi.preview.api.PreviewProperties;
 import org.gephi.preview.api.PreviewProperty;
 import org.gephi.preview.api.RenderTarget;
 import org.gephi.preview.api.SVGTarget;
-import org.gephi.utils.longtask.spi.LongTask;
-import org.gephi.utils.progress.ProgressTicket;
 import org.gephi.project.api.Workspace;
+import org.gephi.utils.longtask.spi.LongTask;
 import org.gephi.utils.progress.Progress;
+import org.gephi.utils.progress.ProgressTicket;
 import org.openide.util.Lookup;
 import org.w3c.dom.Document;
 
@@ -78,6 +77,7 @@ public class SVGExporter implements CharacterExporter, VectorExporter, LongTask 
     private boolean scaleStrokes = false;
     private float margin = 4;
 
+    @Override
     public boolean execute() {
         PreviewController controller = Lookup.getDefault().lookup(PreviewController.class);
         controller.getModel(workspace).getProperties().putValue(PreviewProperty.VISIBILITY_RATIO, 1.0);
@@ -118,6 +118,7 @@ public class SVGExporter implements CharacterExporter, VectorExporter, LongTask 
         return !cancel;
     }
 
+    @Override
     public boolean cancel() {
         cancel = true;
         if (target instanceof LongTask) {
@@ -126,18 +127,22 @@ public class SVGExporter implements CharacterExporter, VectorExporter, LongTask 
         return true;
     }
 
+    @Override
     public void setProgressTicket(ProgressTicket progressTicket) {
         this.progress = progressTicket;
     }
 
+    @Override
     public void setWriter(Writer writer) {
         this.writer = writer;
     }
 
+    @Override
     public Workspace getWorkspace() {
         return workspace;
     }
 
+    @Override
     public void setWorkspace(Workspace workspace) {
         this.workspace = workspace;
     }

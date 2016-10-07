@@ -46,6 +46,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -53,26 +54,31 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.gephi.graph.api.AttributeUtils;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Origin;
-import org.gephi.graph.api.Table;
 import org.gephi.datalab.api.AttributeColumnsController;
 import org.gephi.datalab.api.GraphElementsController;
 import org.gephi.datalab.spi.rows.merge.AttributeRowsMergeStrategy;
+import org.gephi.graph.api.AttributeUtils;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Element;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
+import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Interval;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.Origin;
+import org.gephi.graph.api.Table;
+import org.gephi.graph.api.TimeFormat;
+import org.gephi.graph.api.TimeRepresentation;
 import org.gephi.graph.api.types.IntervalMap;
 import org.gephi.graph.api.types.TimestampMap;
-import org.gephi.graph.impl.GraphStoreConfiguration;
 import org.gephi.utils.StatisticsUtils;
+import org.joda.time.DateTimeZone;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.ServiceProvider;
@@ -88,25 +94,32 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
 
     @Override
     public boolean setAttributeValue(Object value, Element row, Column column) {
+        if (!canChangeColumnData(column)) {
+            return false;
+        }
+
         Class targetType = column.getTypeClass();
         if (value != null && !value.getClass().equals(targetType)) {
             try {
-                value = AttributeUtils.parse(value.toString(), targetType);//Try to convert to target type
+                GraphModel graphModel = column.getTable().getGraph().getModel();
+                
+                String stringValue = AttributeUtils.print(value, graphModel.getTimeFormat(), graphModel.getTimeZone());
+                value = AttributeUtils.parse(stringValue, targetType);//Try to convert to target type from string representation
             } catch (Exception ex) {
                 return false;//Could not parse
             }
         }
-        
+
         if (value == null && !canClearColumnData(column)) {
             return false;//Do not set a null value when the column can't have a null value
         } else {
             try {
-                if(value == null){
+                if (value == null) {
                     row.removeAttribute(column);
-                }else{
+                } else {
                     row.setAttribute(column, value);
                 }
-                
+
                 return true;
             } catch (Exception e) {
                 Logger.getLogger("").log(Level.SEVERE, null, e);
@@ -132,7 +145,7 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
             table.removeColumn(column);
         }
     }
-    
+
     @Override
     public Column convertAttributeColumnToDynamic(Table table, Column column, double low, double high) {
         return convertColumnToDynamic(table, column, low, high, null);
@@ -145,7 +158,14 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
 
     private Column convertColumnToDynamic(Table table, Column column, double low, double high, String newColumnTitle) {
         Class oldType = column.getTypeClass();
-        Class<? extends TimestampMap> newType = AttributeUtils.getTimestampMapType(oldType);
+
+        TimeRepresentation timeRepresentation = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getConfiguration().getTimeRepresentation();
+        Class<?> newType;
+        if (timeRepresentation == TimeRepresentation.TIMESTAMP) {
+            newType = AttributeUtils.getTimestampMapType(oldType);
+        } else {
+            newType = AttributeUtils.getIntervalMapType(oldType);
+        }
 
         if (newColumnTitle != null) {
             if (newColumnTitle.equals(column.getTitle())) {
@@ -167,11 +187,19 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         } else {
             newColumn = table.addColumn(newColumnTitle, newType, column.getOrigin());
         }
-        
-        for (int i = 0; i < rows.length; i++) {
-            if (oldValues[i] != null) {
+
+        if (timeRepresentation == TimeRepresentation.TIMESTAMP) {
+            for (int i = 0; i < rows.length; i++) {
+                if (oldValues[i] != null) {
                     rows[i].setAttribute(newColumn, oldValues[i], low);
-                    rows[i].setAttribute(newColumn, oldValues[i], high);
+                }
+            }
+        } else {
+            Interval interval = new Interval(low, high);
+            for (int i = 0; i < rows.length; i++) {
+                if (oldValues[i] != null) {
+                    rows[i].setAttribute(newColumn, oldValues[i], interval);
+                }
             }
         }
 
@@ -195,15 +223,20 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         }
 
         Class targetType = targetColumn.getTypeClass();
+        Object value;
         if (!targetType.equals(sourceColumn.getTypeClass())) {
-            Object value;
             for (Element row : getTableAttributeRows(table)) {
                 value = row.getAttribute(sourceColumn);
                 setAttributeValue(value, row, targetColumn);
             }
         } else {
             for (Element row : getTableAttributeRows(table)) {
-                row.setAttribute(targetColumn, row.getAttribute(sourceColumn));
+                value = row.getAttribute(sourceColumn);
+                if (value == null) {
+                    row.removeAttribute(targetColumn);
+                } else {
+                    row.setAttribute(targetColumn, value);
+                }
             }
         }
     }
@@ -239,19 +272,19 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
     public void clearColumnData(Table table, Column column) {
         if (canClearColumnData(column)) {
             for (Element row : getTableAttributeRows(table)) {
-                row.setAttribute(column, null);
+                row.removeAttribute(column);
             }
         }
     }
 
     @Override
     public Map<Object, Integer> calculateColumnValuesFrequencies(Table table, Column column) {
-        Map<Object, Integer> valuesFrequencies = new HashMap<Object, Integer>();
+        Map<Object, Integer> valuesFrequencies = new HashMap<>();
         Object value;
         for (Element row : getTableAttributeRows(table)) {
             value = row.getAttribute(column);
             if (valuesFrequencies.containsKey(value)) {
-                valuesFrequencies.put(value,valuesFrequencies.get(value) + 1);
+                valuesFrequencies.put(value, valuesFrequencies.get(value) + 1);
             } else {
                 valuesFrequencies.put(value, 1);
             }
@@ -269,10 +302,13 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
             }
             Matcher matcher;
             Object value;
+
+            TimeFormat timeFormat = table.getGraph().getModel().getTimeFormat();
+            DateTimeZone timeZone = table.getGraph().getModel().getTimeZone();
             for (Element row : getTableAttributeRows(table)) {
                 value = row.getAttribute(column);
                 if (value != null) {
-                    matcher = pattern.matcher(value.toString());
+                    matcher = pattern.matcher(AttributeUtils.print(value, timeFormat, timeZone));
                 } else {
                     matcher = pattern.matcher("");
                 }
@@ -304,11 +340,15 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
             }
             Matcher matcher;
             Object value;
-            ArrayList<String> foundGroups = new ArrayList<String>();
+            ArrayList<String> foundGroups = new ArrayList<>();
+
+            TimeFormat timeFormat = table.getGraph().getModel().getTimeFormat();
+            DateTimeZone timeZone = table.getGraph().getModel().getTimeZone();
+
             for (Element row : getTableAttributeRows(table)) {
                 value = row.getAttribute(column);
                 if (value != null) {
-                    matcher = pattern.matcher(value.toString());
+                    matcher = pattern.matcher(AttributeUtils.print(value, timeFormat, timeZone));
                 } else {
                     matcher = pattern.matcher("");
                 }
@@ -358,20 +398,20 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
             for (Column column : columnsToClear) {
                 //Clear all except id and computed attributes:
                 if (canClearColumnData(column)) {
-                    row.setAttribute(column, null);
+                    row.removeAttribute(column);
                 }
             }
         } else {
             Table table;
-            if(row instanceof Node){
+            if (row instanceof Node) {
                 table = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
-            }else{
+            } else {
                 table = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
             }
-            
+
             for (Column column : table) {
-                if(canClearColumnData(column)){
-                    row.setAttribute(column, null);
+                if (canClearColumnData(column)) {
+                    row.removeAttribute(column);
                 }
             }
         }
@@ -394,22 +434,23 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                 //Copy all except id and computed attributes:
                 if (canChangeColumnData(column)) {
                     for (Element otherRow : otherRows) {
-                        otherRow.setAttribute(column, row.getAttribute(column));
+                        Object value = row.getAttribute(column);
+                        setAttributeValue(value, otherRow, column);
                     }
                 }
             }
         } else {
             Table table;
-            if(row instanceof Node){
+            if (row instanceof Node) {
                 table = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
-            }else{
+            } else {
                 table = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
             }
-            
+
             for (Column column : table) {
-                if(canChangeColumnData(column)){
+                if (canChangeColumnData(column)) {
                     for (Element otherRow : otherRows) {
-                        otherRow.setAttribute(column, null);
+                        otherRow.removeAttribute(column);
                     }
                 }
             }
@@ -448,20 +489,20 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
     public boolean canDeleteColumn(Column column) {
         return !column.isReadOnly() && column.getOrigin() != Origin.PROPERTY;
     }
-    
+
     @Override
-    public boolean isTableColumn(Table table, Column column){
+    public boolean isTableColumn(Table table, Column column) {
         return column.getTable() == table;
     }
-    
+
     @Override
-    public boolean isNodeColumn(Column column){
-        return Node.class.equals(column.getTypeClass());
+    public boolean isNodeColumn(Column column) {
+        return isNodeTable(column.getTable());
     }
-    
+
     @Override
-    public boolean isEdgeColumn(Column column){
-        return Edge.class.equals(column.getTypeClass());
+    public boolean isEdgeColumn(Column column) {
+        return isEdgeTable(column.getTable());
     }
 
     @Override
@@ -471,17 +512,30 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
 
     @Override
     public boolean canClearColumnData(Column column) {
+        if (isEdgeColumn(column) && column.getId().equalsIgnoreCase("weight")) {
+            return false;//Should not remove weight value but grapshtore currently allows it
+        }
+
         return !column.isReadOnly();
     }
 
     @Override
     public boolean canConvertColumnToDynamic(Column column) {
-        if(column.isReadOnly() || AttributeUtils.isDynamicType(column.getTypeClass())){
+        if (column.isReadOnly() || AttributeUtils.isDynamicType(column.getTypeClass())) {
             return false;
         }
-        
+
+        try {
+            //Make sure the simple type can actually be part of a dynamic type of intervals/timestamps
+            //For example array types cannot be converted to dynamic
+            AttributeUtils.getIntervalMapType(column.getTypeClass());
+            AttributeUtils.getTimestampMapType(column.getTypeClass());
+        } catch (Exception e) {
+            return false;
+        }
+
         if (isNodeColumn(column) || isEdgeColumn(column)) {
-            return !GraphStoreConfiguration.ENABLE_ELEMENT_LABEL || column.getIndex() != GraphStoreConfiguration.ELEMENT_LABEL_INDEX;
+            return !column.getTitle().equalsIgnoreCase("Label");
         } else {
             return true;
         }
@@ -500,25 +554,31 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
     @Override
     public Number[] getRowsColumnNumbers(Element[] rows, Column column) {
         Class type = column.getTypeClass();
-        if(!AttributeUtils.isNumberType(type)){
+        if (!AttributeUtils.isNumberType(type)) {
             throw new IllegalArgumentException("The column has to be a number column");
         }
 
-        ArrayList<Number> numbers = new ArrayList<Number>();
+        boolean isDynamic = AttributeUtils.isDynamicType(type);
+        boolean isArray = type.isArray();
+
+        ArrayList<Number> numbers = new ArrayList<>();
         Number number;
         for (Element row : rows) {
-            if (!AttributeUtils.isDynamicType(type)) {
-                if(Number[].class.isAssignableFrom(type)){
-                    numbers.addAll(Arrays.asList((Number[]) row.getAttribute(column)));
-                }else{
-                    //Single number column:
-                    number = (Number) row.getAttribute(column);
-                    if (number != null) {
-                        numbers.add(number);
+            Object value = row.getAttribute(column);
+            if (value != null) {
+                if (!isDynamic) {
+                    if (isArray) {
+                        numbers.addAll(getArrayNumbers(value));
+                    } else {
+                        //Single number column:
+                        number = (Number) row.getAttribute(column);
+                        if (number != null) {
+                            numbers.add(number);
+                        }
                     }
+                } else {
+                    numbers.addAll(getDynamicNumberColumnNumbers(row, column));
                 }
-            } else {
-                numbers.addAll(getDynamicNumberColumnNumbers(row, column));
             }
         }
 
@@ -527,34 +587,38 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
 
     @Override
     public Number[] getRowNumbers(Element row, Column[] columns) {
-        ArrayList<Number> numbers = new ArrayList<Number>();
+        ArrayList<Number> numbers = new ArrayList<>();
         Number number;
         for (Column column : columns) {
             Class type = column.getTypeClass();
-            if(!AttributeUtils.isNumberType(type)){
+            if (!AttributeUtils.isNumberType(type)) {
                 throw new IllegalArgumentException("The column has to be a number column");
             }
-            
-            if (!AttributeUtils.isDynamicType(type)) {
-                if(Number[].class.isAssignableFrom(type)){
-                    numbers.addAll(Arrays.asList((Number[]) row.getAttribute(column)));
-                }else{
-                    //Single number column:
-                    number = (Number) row.getAttribute(column);
-                    if (number != null) {
-                        numbers.add(number);
+            Object value = row.getAttribute(column);
+
+            if (value != null) {
+                if (!AttributeUtils.isDynamicType(type)) {
+                    if (type.isArray()) {
+                        numbers.addAll(getArrayNumbers(value));
+                    } else {
+                        //Single number column:
+                        number = (Number) value;
+                        if (number != null) {
+                            numbers.add(number);
+                        }
                     }
+                } else {
+                    numbers.addAll(getDynamicNumberColumnNumbers(row, column));
                 }
-            } else {
-                numbers.addAll(getDynamicNumberColumnNumbers(row, column));
             }
+
         }
 
         return numbers.toArray(new Number[0]);
     }
 
     @Override
-    public void importCSVToNodesTable(File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean assignNewNodeIds) {
+    public void importCSVToNodesTable(Graph graph, File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean assignNewNodeIds) {
         if (columnNames == null || columnNames.length == 0) {
             return;
         }
@@ -566,10 +630,9 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         CsvReader reader = null;
         try {
             //Prepare attribute columns for the column names, creating the not already existing columns:
-            Table nodesTable = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getNodeTable();
+            Table nodesTable = graph.getModel().getNodeTable();
             String idColumn = null;
-            ArrayList<Column> columnsList = new ArrayList<Column>();
-            HashMap<Column, String> columnHeaders = new HashMap<Column, String>();//Necessary because of column name case insensitivity, to map columns to its corresponding csv header.
+            HashMap<Column, String> columnHeaders = new HashMap<>();//Necessary because of column name case insensitivity, to map columns to its corresponding csv header.
             for (int i = 0; i < columnNames.length; i++) {
                 //Separate first id column found from the list to use as id. If more are found later, the will not be in the list and be ignored.
                 if (columnNames[i].equalsIgnoreCase("id")) {
@@ -578,21 +641,20 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                     }
                 } else if (nodesTable.hasColumn(columnNames[i])) {
                     Column column = nodesTable.getColumn(columnNames[i]);
-                    columnsList.add(column);
                     columnHeaders.put(column, columnNames[i]);
                 } else {
                     Column column = addAttributeColumn(nodesTable, columnNames[i], columnTypes[i]);
                     if (column != null) {
-                        columnsList.add(column);
                         columnHeaders.put(column, columnNames[i]);
                     }
                 }
             }
 
+            Set<Column> columnList = columnHeaders.keySet();
+
             //Create nodes:
             GraphElementsController gec = Lookup.getDefault().lookup(GraphElementsController.class);
-            Graph graph = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getGraph();
-            String id = null;
+            String id;
             Node node;
             reader = new CsvReader(new FileInputStream(file), separator, charset);
             reader.setTrimWhitespace(false);
@@ -619,7 +681,7 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                     node = gec.createNode(null);
                 }
                 //Assign attributes to the current node:
-                for (Column column : columnsList) {
+                for (Column column : columnList) {
                     setAttributeValue(reader.get(columnHeaders.get(column)), node, column);
                 }
             }
@@ -628,14 +690,14 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         } finally {
-            if(reader != null){
+            if (reader != null) {
                 reader.close();
             }
         }
     }
 
     @Override
-    public void importCSVToEdgesTable(File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean createNewNodes) {
+    public void importCSVToEdgesTable(Graph graph, File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean createNewNodes) {
         if (columnNames == null || columnNames.length == 0) {
             return;
         }
@@ -647,59 +709,64 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         CsvReader reader = null;
         try {
             //Prepare attribute columns for the column names, creating the not already existing columns:
-            Table edgesTable = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getEdgeTable();
-            String idColumn = null;
-            String sourceColumn = null;
-            String targetColumn = null;
-            String typeColumn = null;
-            String weightColumn = null;
-            ArrayList<Column> columnsList = new ArrayList<Column>();
-            HashMap<Column, String> columnHeaders = new HashMap<Column, String>();//Necessary because of column name case insensitivity, to map columns to its corresponding csv header.
+            Table edgesTable = graph.getModel().getEdgeTable();
+            Column weightColumn = edgesTable.getColumn("Weight");
+            boolean isDynamicWeight = weightColumn.isDynamic();
+
+            String idColumnHeader = null;
+            String sourceColumnHeader = null;
+            String targetColumnHeader = null;
+            String typeColumnHeader = null;
+            String weightColumnHeader = null;
+            HashMap<Column, String> columnHeaders = new HashMap<>();//Necessary because of column name case insensitivity, to map columns to its corresponding csv header.
             for (int i = 0; i < columnNames.length; i++) {
                 //Separate first id column found from the list to use as id. If more are found later, the will not be in the list and be ignored.
                 if (columnNames[i].equalsIgnoreCase("id")) {
-                    if (idColumn == null) {
-                        idColumn = columnNames[i];
+                    if (idColumnHeader == null) {
+                        idColumnHeader = columnNames[i];
                     }
-                } else if (columnNames[i].equalsIgnoreCase("source") && sourceColumn == null) {//Separate first source column found from the list to use as source node id
-                    sourceColumn = columnNames[i];
-                } else if (columnNames[i].equalsIgnoreCase("target") && targetColumn == null) {//Separate first target column found from the list to use as target node id
-                    targetColumn = columnNames[i];
-                } else if (columnNames[i].equalsIgnoreCase("type") && typeColumn == null) {//Separate first type column found from the list to use as edge type (directed/undirected)
-                    typeColumn = columnNames[i];
-                } else if (columnNames[i].equalsIgnoreCase("weight") && weightColumn == null) {//Separate first weight column found from the list to use as edge weight
-                    weightColumn = columnNames[i];
+                } else if (columnNames[i].equalsIgnoreCase("source") && sourceColumnHeader == null) {//Separate first source column found from the list to use as source node id
+                    sourceColumnHeader = columnNames[i];
+                } else if (columnNames[i].equalsIgnoreCase("target") && targetColumnHeader == null) {//Separate first target column found from the list to use as target node id
+                    targetColumnHeader = columnNames[i];
+                } else if (columnNames[i].equalsIgnoreCase("type") && typeColumnHeader == null) {//Separate first type column found from the list to use as edge type (directed/undirected)
+                    typeColumnHeader = columnNames[i];
                 } else if (edgesTable.hasColumn(columnNames[i])) {
+                    //Any other existing column:
                     Column column = edgesTable.getColumn(columnNames[i]);
-                    columnsList.add(column);
                     columnHeaders.put(column, columnNames[i]);
+                    if (column.equals(weightColumn)) {
+                        weightColumnHeader = columnNames[i];
+                    }
                 } else {
+                    //New column:
                     Column column = addAttributeColumn(edgesTable, columnNames[i], columnTypes[i]);
                     if (column != null) {
-                        columnsList.add(column);
                         columnHeaders.put(column, columnNames[i]);
                     }
                 }
             }
 
+            Set<Column> columnList = columnHeaders.keySet();
+
             //Create edges:
             GraphElementsController gec = Lookup.getDefault().lookup(GraphElementsController.class);
-            Graph graph = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getGraph();
-            String id;
-            Edge edge;
-            String sourceId, targetId;
-            Node source, target;
-            String type;
-            boolean directed;
             reader = new CsvReader(new FileInputStream(file), separator, charset);
             reader.setTrimWhitespace(false);
             reader.readHeaders();
-            
+
             int recordNumber = 0;
             while (reader.readRecord()) {
+                String id;
+                Edge edge = null;
+                String sourceId, targetId;
+                Node source, target;
+                String type;
+                boolean directed;
+
                 recordNumber++;
-                sourceId = reader.get(sourceColumn);
-                targetId = reader.get(targetColumn);
+                sourceId = reader.get(sourceColumnHeader);
+                targetId = reader.get(targetColumnHeader);
 
                 if (sourceId == null || sourceId.trim().isEmpty() || targetId == null || targetId.trim().isEmpty()) {
                     Logger.getLogger("").log(Level.WARNING, "Ignoring record {0} due to empty source and/or target node ids", recordNumber);
@@ -734,8 +801,8 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                     }
                 }
 
-                if (typeColumn != null) {
-                    type = reader.get(typeColumn);
+                if (typeColumnHeader != null) {
+                    type = reader.get(typeColumnHeader);
                     //Undirected if indicated correctly, otherwise always directed:
                     if (type != null) {
                         directed = !type.equalsIgnoreCase("undirected");
@@ -747,12 +814,16 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                 }
 
                 //Prepare the correct edge to assign the attributes:
-                if (idColumn != null) {
-                    id = reader.get(idColumn);
+                if (idColumnHeader != null) {
+                    id = reader.get(idColumnHeader);
                     if (id == null || id.isEmpty()) {
                         edge = gec.createEdge(source, target, directed);//id null or empty, assign one
                     } else {
-                        edge = gec.createEdge(id, source, target, directed);
+                        Edge edgeById = graph.getEdge(id);
+
+                        if (edgeById == null) {
+                            edge = gec.createEdge(id, source, target, directed);
+                        }
                         if (edge == null) {//Edge with that id already in graph
                             edge = gec.createEdge(source, target, directed);
                         }
@@ -762,34 +833,35 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                 }
 
                 if (edge != null) {//Edge could be created because it does not already exist:
-                    //Assign attributes to the current edge:
-                    for (Column column : columnsList) {
+                    //Assign all attributes to the new edge:
+                    for (Column column : columnList) {
                         setAttributeValue(reader.get(columnHeaders.get(column)), edge, column);
                     }
                 } else {
-                    //Do not ignore repeated edge, instead increase edge weight
                     edge = graph.getEdge(source, target);
                     if (edge == null) {
                         //Not from source to target but undirected and reverse?
                         edge = graph.getEdge(target, source);
                         if (edge != null && edge.isDirected()) {
-                            edge = null;
+                            edge = null;//Cannot use it since it's actually directed
                         }
                     }
                     if (edge != null) {
-                        //Increase edge weight with specified weight (if specified), else increase by 1:
-                        String weight = reader.get(weightColumn);
-                        if (weight != null) {
-                            try {
-                                Float weightFloat = Float.parseFloat(weight);
-                                edge.setWeight(weightFloat);
-                            } catch (NumberFormatException numberFormatException) {
-                                //Not valid weight, add 1
+                        //Increase non dynamic edge weight with specified weight (if specified), else increase by 1:
+                        if (!isDynamicWeight) {
+                            if (weightColumnHeader != null) {
+                                String weight = reader.get(weightColumnHeader);
+                                try {
+                                    Float weightFloat = Float.parseFloat(weight);
+                                    edge.setWeight(edge.getWeight() + weightFloat);
+                                } catch (NumberFormatException numberFormatException) {
+                                    //Not valid weight, add 1
+                                    edge.setWeight(edge.getWeight() + 1);
+                                }
+                            } else {
+                                //Add 1 (weight not specified)
                                 edge.setWeight(edge.getWeight() + 1);
                             }
-                        } else {
-                            //Add 1 (weight not specified)
-                            edge.setWeight(edge.getWeight() + 1);
                         }
                     }
                 }
@@ -799,7 +871,7 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         } catch (IOException ex) {
             Logger.getLogger("").log(Level.SEVERE, null, ex);
         } finally {
-            if(reader != null){
+            if (reader != null) {
                 reader.close();
             }
         }
@@ -816,7 +888,7 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
 
         AttributeRowsMergeStrategy mergeStrategy;
         Object value;
-        
+
         int i = 0;
         for (Column column : columns) {
             mergeStrategy = mergeStrategies[i];
@@ -832,36 +904,40 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
                 value = selectedRow.getAttribute(column);
             }
             setAttributeValue(value, resultRow, column);
-            
+
             i++;
         }
     }
 
     @Override
     public List<List<Node>> detectNodeDuplicatesByColumn(Column column, boolean caseSensitive) {
-        final HashMap<String, List<Node>> valuesMap = new HashMap<String, List<Node>>();
+        final HashMap<String, List<Node>> valuesMap = new HashMap<>();
 
         Graph graph = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getGraph();
         Object value;
         String strValue;
+        
+        TimeFormat timeFormat = graph.getModel().getTimeFormat();
+        DateTimeZone timeZone = graph.getModel().getTimeZone();
+        
         for (Node node : graph.getNodes().toArray()) {
             value = node.getAttribute(column);
             if (value != null) {
-                strValue = value.toString();
+                strValue = AttributeUtils.print(value, timeFormat, timeZone);
                 if (!caseSensitive) {
                     strValue = strValue.toLowerCase();
                 }
                 if (valuesMap.containsKey(strValue)) {
                     valuesMap.get(strValue).add(node);
                 } else {
-                    ArrayList<Node> newGroup = new ArrayList<Node>();
+                    ArrayList<Node> newGroup = new ArrayList<>();
                     newGroup.add(node);
                     valuesMap.put(strValue, newGroup);
                 }
             }
         }
 
-        final List<List<Node>> groupsList = new ArrayList<List<Node>>();
+        final List<List<Node>> groupsList = new ArrayList<>();
         for (List<Node> group : valuesMap.values()) {
             if (group.size() > 1) {
                 groupsList.add(group);
@@ -927,29 +1003,49 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
 
     /**
      * Used for obtaining a list of the numbers of row of a dynamic number column.
+     *
+     * @param row Row
+     * @param column Column with dynamic type
+     * @return list of numbers
      */
     private List<Number> getDynamicNumberColumnNumbers(Element row, Column column) {
         Class type = column.getTypeClass();
         if (!(AttributeUtils.isNumberType(type) && AttributeUtils.isDynamicType(type))) {
             throw new IllegalArgumentException("Column must be a dynamic number column");
         }
-        
-        if(TimestampMap.class.isAssignableFrom(type)){//Timestamp type:
+
+        if (TimestampMap.class.isAssignableFrom(type)) {//Timestamp type:
             TimestampMap timestampMap = (TimestampMap) row.getAttribute(column);
             if (timestampMap == null) {
-                return new ArrayList<Number>();
+                return new ArrayList<>();
             }
             Number[] dynamicNumbers = (Number[]) timestampMap.toValuesArray();
             return Arrays.asList(dynamicNumbers);
-        }else if(IntervalMap.class.isAssignableFrom(type)){//Interval type:
+        } else if (IntervalMap.class.isAssignableFrom(type)) {//Interval type:
             IntervalMap intervalMap = (IntervalMap) row.getAttribute(column);
             if (intervalMap == null) {
-                return new ArrayList<Number>();
+                return new ArrayList<>();
             }
             Number[] dynamicNumbers = (Number[]) intervalMap.toValuesArray();
             return Arrays.asList(dynamicNumbers);
-        }else{
+        } else {
             throw new IllegalArgumentException("Unsupported dynamic type class " + type.getCanonicalName());
         }
+    }
+
+    /**
+     * Works for arrays of primitive and non primitive numbers.
+     *
+     * @param arr Array of Number assignable type
+     * @return numbers
+     */
+    private List<Number> getArrayNumbers(Object arr) {
+        int length = Array.getLength(arr);
+        List<Number> result = new ArrayList<>();
+
+        for (int i = 0; i < length; i++) {
+            result.add((Number) Array.get(arr, i));
+        }
+        return result;
     }
 }

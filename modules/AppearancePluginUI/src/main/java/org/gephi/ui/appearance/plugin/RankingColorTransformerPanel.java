@@ -45,26 +45,20 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.Arrays;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import org.gephi.appearance.api.RankingFunction;
 import org.gephi.appearance.plugin.RankingElementColorTransformer;
 import org.gephi.ui.components.PaletteIcon;
 import org.gephi.ui.components.gradientslider.GradientSlider;
+import org.gephi.ui.components.gradientslider.MultiThumbSlider;
 import org.gephi.utils.PaletteUtils;
 import org.gephi.utils.PaletteUtils.Palette;
 import org.openide.util.NbBundle;
-import org.openide.util.NbPreferences;
 
 /**
  * @author Mathieu Bastian
@@ -78,67 +72,29 @@ public class RankingColorTransformerPanel extends javax.swing.JPanel {
     public RankingColorTransformerPanel() {
         initComponents();
         this.recentPalettes = new RecentPalettes();
-    }
 
-    public void setup(RankingFunction function) {
-        colorTransformer = (RankingElementColorTransformer) function.getTransformer();
-
-        final String POSITIONS = "RankingColorTransformerPanel_" + colorTransformer.getClass().getSimpleName() + "_positions";
-        final String COLORS = "RankingColorTransformerPanel_" + colorTransformer.getClass().getSimpleName() + "_colors";
-
-        float[] positionsStart = colorTransformer.getColorPositions();
-        Color[] colorsStart = colorTransformer.getColors();
-
-        try {
-            positionsStart = deserializePositions(NbPreferences.forModule(RankingColorTransformerPanel.class).getByteArray(POSITIONS, serializePositions(positionsStart)));
-            colorsStart = deserializeColors(NbPreferences.forModule(RankingColorTransformerPanel.class).getByteArray(COLORS, serializeColors(colorsStart)));
-            colorTransformer.setColorPositions(positionsStart);
-            colorTransformer.setColors(colorsStart);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        //Gradient
-        gradientSlider = new GradientSlider(GradientSlider.HORIZONTAL, positionsStart, colorsStart);
+        //Init slider
+        gradientSlider = new GradientSlider(GradientSlider.HORIZONTAL);
         gradientSlider.putClientProperty("GradientSlider.includeOpacity", "false");
-        gradientSlider.addChangeListener(new ChangeListener() {
+        gradientSlider.addPropertyChangeListener(new PropertyChangeListener() {
             @Override
-            public void stateChanged(ChangeEvent e) {
-                Color[] colors = gradientSlider.getColors();
-                float[] positions = gradientSlider.getThumbPositions();
-                colorTransformer.setColors(Arrays.copyOf(colors, colors.length));
-                colorTransformer.setColorPositions(Arrays.copyOf(positions, positions.length));
-                try {
-                    NbPreferences.forModule(RankingColorTransformerPanel.class).putByteArray(POSITIONS, serializePositions(positions));
-                    NbPreferences.forModule(RankingColorTransformerPanel.class).putByteArray(COLORS, serializeColors(colors));
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (colorTransformer != null
+                        && ((!gradientSlider.isValueAdjusting() && evt.getPropertyName().equals(MultiThumbSlider.VALUES_PROPERTY))
+                        || (evt.getPropertyName().equals(MultiThumbSlider.ADJUST_PROPERTY) && evt.getNewValue().equals(Boolean.FALSE)))) {
+                    Color[] colors = gradientSlider.getColors();
+                    float[] positions = gradientSlider.getThumbPositions();
+
+                    if (!Arrays.equals(positions, colorTransformer.getColorPositions()) || !Arrays.deepEquals(colors, colorTransformer.getColors())) {
+                        colorTransformer.setColors(Arrays.copyOf(colors, colors.length));
+                        colorTransformer.setColorPositions(Arrays.copyOf(positions, positions.length));
+                        addRecentPalette();
+                    }
 //                prepareGradientTooltip();
+                }
             }
         });
         gradientPanel.add(gradientSlider, BorderLayout.CENTER);
-
-//        prepareGradientTooltip();
-
-        //Context
-//        setComponentPopupMenu(getPalettePopupMenu());
-        addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent evt) {
-                if (evt.isPopupTrigger()) {
-                    JPopupMenu popupMenu = getPalettePopupMenu();
-                    popupMenu.show(evt.getComponent(), evt.getX(), evt.getY());
-                }
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent evt) {
-                if (evt.isPopupTrigger()) {
-                    JPopupMenu popupMenu = getPalettePopupMenu();
-                    popupMenu.show(evt.getComponent(), evt.getX(), evt.getY());
-                }
-            }
-        });
 
         //Color Swatch
         colorSwatchButton.addActionListener(new ActionListener() {
@@ -148,6 +104,20 @@ public class RankingColorTransformerPanel extends javax.swing.JPanel {
                 popupMenu.show(colorSwatchToolbar, -popupMenu.getPreferredSize().width, 0);
             }
         });
+    }
+
+    public void setup(RankingFunction function) {
+        colorTransformer = (RankingElementColorTransformer) function.getTransformer();
+
+        float[] positionsStart = colorTransformer.getColorPositions();
+        Color[] colorsStart = colorTransformer.getColors();
+
+        //Gradient
+        gradientSlider.setValues(positionsStart, colorsStart);
+
+//        prepareGradientTooltip();
+        //Context
+//        setComponentPopupMenu(getPalettePopupMenu());
     }
 
 //    private void prepareGradientTooltip() {
@@ -239,38 +209,6 @@ public class RankingColorTransformerPanel extends javax.swing.JPanel {
         }
 
         return res;
-    }
-
-    private byte[] serializePositions(float[] positions) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ObjectOutputStream out = new ObjectOutputStream(bos);
-        out.writeObject(positions);
-        out.close();
-        return bos.toByteArray();
-    }
-
-    private float[] deserializePositions(byte[] positions) throws Exception {
-        ByteArrayInputStream bis = new ByteArrayInputStream(positions);
-        ObjectInputStream in = new ObjectInputStream(bis);
-        float[] array = (float[]) in.readObject();
-        in.close();
-        return array;
-    }
-
-    private byte[] serializeColors(Color[] colors) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ObjectOutputStream out = new ObjectOutputStream(bos);
-        out.writeObject(colors);
-        out.close();
-        return bos.toByteArray();
-    }
-
-    private Color[] deserializeColors(byte[] colors) throws Exception {
-        ByteArrayInputStream bis = new ByteArrayInputStream(colors);
-        ObjectInputStream in = new ObjectInputStream(bis);
-        Color[] array = (Color[]) in.readObject();
-        in.close();
-        return array;
     }
 
     /**

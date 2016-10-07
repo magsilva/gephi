@@ -43,9 +43,10 @@ package org.gephi.filters.plugin;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.gephi.filters.spi.Filter;
 import org.gephi.filters.spi.FilterProperty;
-import org.openide.util.Exceptions;
 
 /**
  *
@@ -58,13 +59,15 @@ public abstract class AbstractFilter implements Filter {
 
     public AbstractFilter(String name) {
         this.name = name;
-        this.properties = new ArrayList<FilterProperty>();
+        this.properties = new ArrayList<>();
     }
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public FilterProperty[] getProperties() {
         return properties.toArray(new FilterProperty[0]);
     }
@@ -73,7 +76,7 @@ public abstract class AbstractFilter implements Filter {
         try {
             properties.add(FilterProperty.createProperty(this, clazz, name));
         } catch (NoSuchMethodException ex) {
-            Exceptions.printStackTrace(ex);
+            Logger.getLogger("").log(Level.SEVERE, "Error while creating '" + name + "' property", ex);
         }
     }
 }

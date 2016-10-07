@@ -47,6 +47,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ import org.gephi.io.importer.spi.DatabaseImporter;
 import org.gephi.io.importer.spi.FileImporter;
 import org.gephi.io.importer.spi.ImporterUI;
 import org.gephi.io.importer.spi.ImporterWizardUI;
-import org.gephi.io.importer.spi.SpigotImporter;
+import org.gephi.io.importer.spi.WizardImporter;
 import org.gephi.io.processor.spi.Processor;
 import org.gephi.io.processor.spi.ProcessorUI;
 import org.gephi.project.api.ProjectController;
@@ -144,7 +145,9 @@ public class DesktopImportControllerUI implements ImportControllerUI {
             if (ui != null) {
                 String title = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.file.ui.dialog.title", ui.getDisplayName());
                 JPanel panel = ui.getPanel();
-                ui.setup(new FileImporter[]{importer});
+                FileImporter[] fi = (FileImporter[]) Array.newInstance(importer.getClass(), 1);
+                fi[0] = importer;
+                ui.setup(fi);
                 final DialogDescriptor dd = new DialogDescriptor(panel, title);
                 if (panel instanceof ValidationPanel) {
                     ValidationPanel vp = (ValidationPanel) panel;
@@ -196,8 +199,8 @@ public class DesktopImportControllerUI implements ImportControllerUI {
     @Override
     public void importFiles(FileObject[] fileObjects) {
         try {
-            Map<ImporterUI, List<FileImporter>> importerUIs = new HashMap<ImporterUI, List<FileImporter>>();
-            List<FileImporter> importers = new ArrayList<FileImporter>();
+            Map<ImporterUI, List<FileImporter>> importerUIs = new HashMap<>();
+            List<FileImporter> importers = new ArrayList<>();
             for (FileObject fileObject : fileObjects) {
                 FileImporter importer = controller.getFileImporter(FileUtil.toFile(fileObject));
                 if (importer == null) {
@@ -210,7 +213,7 @@ public class DesktopImportControllerUI implements ImportControllerUI {
                 if (ui != null) {
                     List<FileImporter> l = importerUIs.get(ui);
                     if (l == null) {
-                        l = new ArrayList<FileImporter>();
+                        l = new ArrayList<>();
                         importerUIs.put(ui, l);
                     }
                     l.add(importer);
@@ -225,7 +228,8 @@ public class DesktopImportControllerUI implements ImportControllerUI {
                 ImporterUI ui = entry.getKey();
                 String title = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.file.ui.dialog.title", ui.getDisplayName());
                 JPanel panel = ui.getPanel();
-                ui.setup(entry.getValue().toArray(new FileImporter[0]));
+                FileImporter[] fi = (FileImporter[]) entry.getValue().toArray((FileImporter[]) Array.newInstance(entry.getValue().get(0).getClass(), 0));
+                ui.setup(fi);
                 final DialogDescriptor dd = new DialogDescriptor(panel, title);
                 if (panel instanceof ValidationPanel) {
                     ValidationPanel vp = (ValidationPanel) panel;
@@ -245,7 +249,7 @@ public class DesktopImportControllerUI implements ImportControllerUI {
                 ui.unsetup(true);
             }
 
-            final List<Container> result = new ArrayList<Container>();
+            final List<Container> result = new ArrayList<>();
             for (int i = 0; i < importers.size(); i++) {
                 final FileImporter importer = importers.get(i);
                 FileObject fileObject = fileObjects[i];
@@ -302,7 +306,9 @@ public class DesktopImportControllerUI implements ImportControllerUI {
             if (ui != null) {
                 String title = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.file.ui.dialog.title", ui.getDisplayName());
                 JPanel panel = ui.getPanel();
-                ui.setup(new FileImporter[]{importer});
+                FileImporter[] fi = (FileImporter[]) Array.newInstance(importer.getClass(), 1);
+                fi[0] = importer;
+                ui.setup(fi);
                 final DialogDescriptor dd = new DialogDescriptor(panel, title);
                 if (panel instanceof ValidationPanel) {
                     ValidationPanel vp = (ValidationPanel) panel;
@@ -361,7 +367,9 @@ public class DesktopImportControllerUI implements ImportControllerUI {
 
             ImporterUI ui = controller.getUI(importer);
             if (ui != null) {
-                ui.setup(new FileImporter[]{importer});
+                FileImporter[] fi = (FileImporter[]) Array.newInstance(importer.getClass(), 1);
+                fi[0] = importer;
+                ui.setup(fi);
                 String title = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.file.ui.dialog.title", ui.getDisplayName());
                 JPanel panel = ui.getPanel();
                 final DialogDescriptor dd = new DialogDescriptor(panel, title);
@@ -480,7 +488,7 @@ public class DesktopImportControllerUI implements ImportControllerUI {
     }
 
     @Override
-    public void importSpigot(final SpigotImporter importer) {
+    public void importWizard(final WizardImporter importer) {
         try {
             if (importer == null) {
                 NotifyDescriptor.Message msg = new NotifyDescriptor.Message(NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.error_no_matching_db_importer"), NotifyDescriptor.WARNING_MESSAGE);
@@ -488,12 +496,12 @@ public class DesktopImportControllerUI implements ImportControllerUI {
                 return;
             }
 
-            String containerSource = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.spigotSource", "");
+            String containerSource = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.wizardSource", "");
             ImporterUI ui = controller.getUI(importer);
             if (ui != null) {
-                String title = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.spigot.ui.dialog.title", ui.getDisplayName());
+                String title = NbBundle.getMessage(DesktopImportControllerUI.class, "DesktopImportControllerUI.wizard.ui.dialog.title", ui.getDisplayName());
                 JPanel panel = ui.getPanel();
-                ui.setup(new SpigotImporter[]{importer});
+                ui.setup(new WizardImporter[]{importer});
                 final DialogDescriptor dd = new DialogDescriptor(panel, title);
                 if (panel instanceof ValidationPanel) {
                     ValidationPanel vp = (ValidationPanel) panel;
@@ -530,7 +538,7 @@ public class DesktopImportControllerUI implements ImportControllerUI {
                 @Override
                 public void run() {
                     try {
-                        Container container = controller.importSpigot(importer);
+                        Container container = controller.importWizard(importer);
                         if (container != null) {
                             container.setSource(source);
                             finishImport(container);

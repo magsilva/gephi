@@ -48,9 +48,11 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.gephi.graph.api.AttributeUtils;
 import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Element;
+import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.Node;
 import org.gephi.graph.api.TextProperties;
 import org.gephi.visualization.VizArchitecture;
@@ -93,9 +95,10 @@ public class TextManager implements VizArchitecture {
         sizeModes[2] = new ProportionalSizeMode();
 
         //ColorMode init
-        colorModes = new ColorMode[2];
+        colorModes = new ColorMode[3];
         colorModes[0] = new UniqueColorMode();
         colorModes[1] = new ObjectColorMode();
+        colorModes[2] = new TextColorMode();
     }
 
     @Override
@@ -199,40 +202,42 @@ public class TextManager implements VizArchitecture {
         return edgeRenderer;
     }
 
-    public boolean refreshNode(NodeModel node) {
+    public boolean refreshNode(Graph graph, NodeModel node, TextModelImpl modelImpl) {
         TextProperties textData = node.getNode().getTextProperties();
         if (textData != null) {
             String txt = textData.getText();
-            String newTxt = buildText(node.getNode(), model.getNodeTextColumns());
+            String newTxt = buildText(graph, node.getNode(), modelImpl.getNodeTextColumns());
             if ((txt == null && newTxt != null) || (txt != null && newTxt == null)
                     || (txt != null && newTxt != null && !txt.equals(newTxt))) {
                 node.setText(newTxt);
                 return true;
             }
         }
+        nodeRefresh = true;
         return false;
     }
 
-    public boolean refreshEdge(EdgeModel edge) {
+    public boolean refreshEdge(Graph graph, EdgeModel edge, TextModelImpl modelImpl) {
         TextProperties textData = edge.getEdge().getTextProperties();
         if (textData != null) {
             String txt = textData.getText();
-            String newTxt = buildText(edge.getEdge(), model.getEdgeTextColumns());
+            String newTxt = buildText(graph, edge.getEdge(), modelImpl.getEdgeTextColumns());
             if ((txt == null && newTxt != null) || (txt != null && newTxt == null)
                     || (txt != null && newTxt != null && !txt.equals(newTxt))) {
                 edge.setText(newTxt);
                 return true;
             }
         }
+        edgeRefresh = true;
         return false;
     }
 
-    private String buildText(Element element, Column[] selectedColumns) {
+    private String buildText(Graph graph, Element element, Column[] selectedColumns) {
         String txt;
         if (selectedColumns == null || selectedColumns.length == 0) {
             txt = element.getLabel();
         } else if (selectedColumns.length == 1) {
-            txt = element.getAttribute(selectedColumns[0]).toString();
+            return buildText(graph, element, selectedColumns[0]);
         } else {
             StringBuilder sb = new StringBuilder();
             int i = 0;
@@ -240,12 +245,23 @@ public class TextManager implements VizArchitecture {
                 if (i++ > 0) {
                     sb.append(" - ");
                 }
-                Object val = element.getAttribute(c);
-                sb.append(val != null ? val : "");
+                sb.append(buildText(graph, element, c));
             }
             txt = sb.toString();
         }
         return (txt != null && !txt.isEmpty()) ? txt : null;
+    }
+
+    private String buildText(Graph graph, Element element, Column column) {
+        Object val = element.getAttribute(column, graph.getView());
+        if (val == null) {
+            return "";
+        }
+        if (column.isArray()) {
+            return AttributeUtils.printArray(val);
+        } else {
+            return val.toString();
+        }
     }
 
     //-------------------------------------------------------------------------------------------------
@@ -353,13 +369,6 @@ public class TextManager implements VizArchitecture {
                 }
                 model.colorMode.textNodeColor(this, objectModel);
 
-//                float sizeFactor = textData.getSize() * model.sizeMode.getSizeFactor3d(model.nodeSizeFactor, objectModel);
-//
-//                float width = sizeFactor * objectModel.getTextWidth();
-//                float height = sizeFactor * objectModel.getTextHeight();
-//                float posX = node.x() + (float) width / -2;
-//                float posY = node.y() + (float) height / -2;
-//                float posZ = node.z();
                 renderer.draw3D(txt, posX, posY, (float) node.z(), sizeFactor);
             }
         }
@@ -370,30 +379,37 @@ public class TextManager implements VizArchitecture {
             TextProperties textData = (TextProperties) edge.getTextProperties();
             if (textData != null) {
                 String txt = textData.getText();
-                Rectangle2D r;
+                float width, height, posX, posY;
 
                 if (txt == null || txt.isEmpty()) {
                     return;
                 }
 
-                float sizeFactor = 1f;
-//                if (edgeRefresh || objectModel.getTextBounds() == null) {
-//                    r = renderer.getBounds(txt);
-//                    objectModel.setTextBounds(r);
-//                } else {
-//                    r = objectModel.getTextBounds();
-//                }
+                float sizeFactor = drawable.getGlobalScale() * textData.getSize() * model.edgeSizeFactor;
+                if (edgeRefresh || (objectModel.getTextWidth() == 0f && objectModel.getTextHeight() == 0f)) {
+                    Rectangle2D r = renderer.getBounds(txt);
+
+                    width = (float) (sizeFactor * r.getWidth());
+                    height = (float) (sizeFactor * r.getHeight());
+                    textData.setDimensions(width, height);
+                } else {
+                    width = textData.getWidth();
+                    height = textData.getHeight();
+                }
 
                 model.colorMode.textEdgeColor(this, objectModel);
-//                float sizeFactor = textData.getSize() * model.sizeMode.getSizeFactor3d(model.edgeSizeFactor, objectModel);
-                float width = sizeFactor * objectModel.getTextWidth();
-                float height = sizeFactor * objectModel.getTextHeight();
-                float x = (objectModel.getSourceModel().getNode().x() + 2 * objectModel.getTargetModel().getNode().x()) / 3f;
-                float y = (objectModel.getSourceModel().getNode().y() + 2 * objectModel.getTargetModel().getNode().y()) / 3f;
-                float z = (objectModel.getSourceModel().getNode().z() + 2 * objectModel.getTargetModel().getNode().z()) / 3f;
 
-                float posX = x + (float) width / -2 * sizeFactor;
-                float posY = y + (float) height / -2 * sizeFactor;
+                float x, y;
+                if (edge.isDirected()) {
+                    x = (objectModel.getSourceModel().getNode().x() + 2 * objectModel.getTargetModel().getNode().x()) / 3f;
+                    y = (objectModel.getSourceModel().getNode().y() + 2 * objectModel.getTargetModel().getNode().y()) / 3f;
+                } else {
+                    x = (objectModel.getSourceModel().getNode().x() + objectModel.getTargetModel().getNode().x()) / 2f;
+                    y = (objectModel.getSourceModel().getNode().y() + objectModel.getTargetModel().getNode().y()) / 2f;
+                }
+
+                posX = x + (float) width / -2;
+                posY = y + (float) height / -2;
                 float posZ = 0;
 
                 renderer.draw3D(txt, posX, posY, posZ, sizeFactor);

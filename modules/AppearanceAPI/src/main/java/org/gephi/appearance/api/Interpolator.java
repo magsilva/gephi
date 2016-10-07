@@ -44,17 +44,14 @@ package org.gephi.appearance.api;
 import java.awt.geom.Point2D;
 
 /**
- * Abstract clas that defines the single {@link #interpolate(float)} method.
- * This abstract class is implemented by built-in interpolators.
- *
- * @author Mathieu Bastian
+ * Abstract class that defines the single {@link #interpolate(float)} method.
+ * This abstract class is implemented by built-in interpolators accessible as
+ * static classes.
  */
 public abstract class Interpolator {
 
     /**
-     * Linear interpolation
-     * <code>x = interpolate(x)
-     * <code>
+     * Linear interpolation <code>x = interpolate(x)</code>
      */
     public static final Interpolator LINEAR = new Interpolator() {
         @Override

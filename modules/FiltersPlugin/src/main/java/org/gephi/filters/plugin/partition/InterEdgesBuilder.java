@@ -42,12 +42,11 @@
 package org.gephi.filters.plugin.partition;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import javax.swing.Icon;
 import javax.swing.JPanel;
-import org.gephi.data.attributes.api.AttributeColumn;
+import org.gephi.appearance.api.AppearanceController;
+import org.gephi.appearance.api.AppearanceModel;
 import org.gephi.filters.api.FilterLibrary;
 import org.gephi.filters.plugin.partition.PartitionBuilder.PartitionFilter;
 import org.gephi.filters.spi.Category;
@@ -55,13 +54,12 @@ import org.gephi.filters.spi.CategoryBuilder;
 import org.gephi.filters.spi.EdgeFilter;
 import org.gephi.filters.spi.Filter;
 import org.gephi.filters.spi.FilterBuilder;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
-import org.gephi.partition.api.EdgePartition;
-import org.gephi.partition.api.NodePartition;
-import org.gephi.partition.api.Part;
-import org.gephi.partition.api.Partition;
-import org.gephi.partition.api.PartitionController;
+import org.gephi.graph.api.GraphController;
+import org.gephi.graph.api.GraphModel;
+import org.gephi.project.api.Workspace;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.lookup.ServiceProvider;
@@ -78,19 +76,27 @@ public class InterEdgesBuilder implements CategoryBuilder {
             null,
             FilterLibrary.ATTRIBUTES);
 
+    @Override
     public Category getCategory() {
         return INTER_EDGES;
     }
 
-    public FilterBuilder[] getBuilders() {
-        List<FilterBuilder> builders = new ArrayList<FilterBuilder>();
-        PartitionController pc = Lookup.getDefault().lookup(PartitionController.class);
-        if (pc.getModel() != null) {
-            pc.refreshPartitions();
-            NodePartition[] nodePartitions = pc.getModel().getNodePartitions();
-            for (NodePartition np : nodePartitions) {
-                InterEdgesFilterBuilder builder = new InterEdgesFilterBuilder(np.getColumn(), np);
-                builders.add(builder);
+    @Override
+    public FilterBuilder[] getBuilders(Workspace workspace) {
+        List<FilterBuilder> builders = new ArrayList<>();
+        GraphModel gm = Lookup.getDefault().lookup(GraphController.class).getGraphModel(workspace);
+        Graph graph = gm.getGraph();
+        AppearanceModel am = Lookup.getDefault().lookup(AppearanceController.class).getModel(workspace);
+
+        //Force refresh
+        am.getNodeFunctions(graph);
+
+        for (Column nodeCol : gm.getNodeTable()) {
+            if (!nodeCol.isProperty()) {
+                if (am.getNodePartition(graph, nodeCol) != null) {
+                    InterEdgesFilterBuilder builder = new InterEdgesFilterBuilder(nodeCol, am);
+                    builders.add(builder);
+                }
             }
         }
 
@@ -99,34 +105,40 @@ public class InterEdgesBuilder implements CategoryBuilder {
 
     private static class InterEdgesFilterBuilder implements FilterBuilder {
 
-        private final AttributeColumn column;
-        private Partition partition;
+        private final Column column;
+        private final AppearanceModel model;
 
-        public InterEdgesFilterBuilder(AttributeColumn column, NodePartition partition) {
+        public InterEdgesFilterBuilder(Column column, AppearanceModel model) {
             this.column = column;
-            this.partition = partition;
+            this.model = model;
         }
 
+        @Override
         public Category getCategory() {
             return INTER_EDGES;
         }
 
+        @Override
         public String getName() {
             return column.getTitle();
         }
 
+        @Override
         public Icon getIcon() {
             return null;
         }
 
+        @Override
         public String getDescription() {
             return NbBundle.getMessage(InterEdgesBuilder.class, "InterEdgesBuilder.description");
         }
 
-        public InterEdgesFilter getFilter() {
-            return new InterEdgesFilter(partition);
+        @Override
+        public InterEdgesFilter getFilter(Workspace workspace) {
+            return new InterEdgesFilter(column, model);
         }
 
+        @Override
         public JPanel getPanel(Filter filter) {
             PartitionUI ui = Lookup.getDefault().lookup(PartitionUI.class);
             if (ui != null) {
@@ -135,46 +147,39 @@ public class InterEdgesBuilder implements CategoryBuilder {
             return null;
         }
 
+        @Override
         public void destroy(Filter filter) {
         }
     }
 
     public static class InterEdgesFilter extends PartitionFilter implements EdgeFilter {
 
-        private Set partsValue;
-
-        public InterEdgesFilter(Partition partition) {
-            super(partition);
+        public InterEdgesFilter(Column column, AppearanceModel model) {
+            super(column, model);
         }
 
         @Override
         public String getName() {
-            return NbBundle.getMessage(IntraEdgesBuilder.class, "InterEdgesBuilder.name") + " (" + partition.getColumn().getTitle() + ")";
+            return NbBundle.getMessage(IntraEdgesBuilder.class, "InterEdgesBuilder.name") + " (" + column.getTitle() + ")";
         }
 
         @Override
         public boolean init(Graph graph) {
-            boolean res = super.init(graph);
-            partsValue = new HashSet();
-            for (Part p : parts) {
-                partsValue.add(p.getValue());
-            }
-            return res;
+            partition = appearanceModel.getNodePartition(graph.getModel().getGraph(), column);
+            return partition != null;
         }
 
         @Override
         public boolean evaluate(Graph graph, Edge edge) {
-            Object srcValue = edge.getSource().getAttributes().getValue(partition.getColumn().getIndex());
-            Object destValue = edge.getTarget().getAttributes().getValue(partition.getColumn().getIndex());
-            if (partsValue.contains(srcValue) && partsValue.contains(destValue) && !srcValue.equals(destValue)) {
-                return true;
-            }
-            return false;
+            Object srcValue = partition.getValue(edge.getSource(), graph);
+            Object destValue = partition.getValue(edge.getTarget(), graph);
+            srcValue = srcValue == null ? NULL : srcValue;
+            destValue = destValue == null ? NULL : destValue;
+            return parts.contains(srcValue) && parts.contains(destValue) && !srcValue.equals(destValue);
         }
 
         @Override
         public void finish() {
-            partsValue = null;
         }
     }
 }

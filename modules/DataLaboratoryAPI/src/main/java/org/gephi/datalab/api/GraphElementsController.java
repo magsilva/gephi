@@ -113,6 +113,16 @@ public interface GraphElementsController {
      * @return New edge if the edge was created succesfully, null otherwise
      */
     Edge createEdge(Node source, Node target, boolean directed);
+
+    /**
+     * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected, in the current graph.</p>
+     * @param source Source node
+     * @param target Target node
+     * @param directed Indicates if the edge has to be directed
+     * @param typeLabel Edge type label or null
+     * @return New edge if the edge was created succesfully, null otherwise
+     */
+    Edge createEdge(Node source, Node target, boolean directed, Object typeLabel);
     
     /**
      * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected.</p>
@@ -123,7 +133,18 @@ public interface GraphElementsController {
      * @return New edge if the edge was created succesfully, null otherwise
      */
     Edge createEdge(Node source, Node target, boolean directed, Graph graph);
-
+    
+    /**
+     * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected.</p>
+     * @param source Source node
+     * @param target Target node
+     * @param directed Indicates if the edge has to be directed
+     * @param typeLabel Edge type label or null
+     * @param graph Graph to insert the node into
+     * @return New edge if the edge was created succesfully, null otherwise
+     */
+    Edge createEdge(Node source, Node target, boolean directed, Object typeLabel, Graph graph);
+    
     /**
      * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected.</p>
      * <p>If a edge with the given id already exists, no edge will be created.</p>
@@ -134,7 +155,19 @@ public interface GraphElementsController {
      * @return New edge if the edge was created succesfully, null otherwise
      */
     Edge createEdge(String id, Node source, Node target, boolean directed);
-    
+
+    /**
+     * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected.</p>
+     * <p>If a edge with the given id already exists, no edge will be created.</p>
+     * @param id Id for the new edge
+     * @param source Source node
+     * @param target Target node
+     * @param directed Indicates if the edge has to be directed
+     * @param typeLabel Edge type label or null
+     * @return New edge if the edge was created succesfully, null otherwise
+     */
+    Edge createEdge(String id, Node source, Node target, boolean directed, Object typeLabel);
+
     /**
      * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected, in the current graph.</p>
      * <p>If a edge with the given id already exists, no edge will be created.</p>
@@ -146,6 +179,19 @@ public interface GraphElementsController {
      * @return New edge if the edge was created succesfully, null otherwise
      */
     Edge createEdge(String id, Node source, Node target, boolean directed, Graph graph);
+    
+    /**
+     * <p>Creates and edge between source and target node (if it does not already exist), directed or undirected, in the current graph.</p>
+     * <p>If a edge with the given id already exists, no edge will be created.</p>
+     * @param id Id for the new edge
+     * @param source Source node
+     * @param target Target node
+     * @param directed Indicates if the edge has to be directed
+     * @param typeLabel Edge type label or null
+     * @param graph Graph to insert the node into
+     * @return New edge if the edge was created succesfully, null otherwise
+     */
+    Edge createEdge(String id, Node source, Node target, boolean directed, Object typeLabel, Graph graph);
     
     /**
      * <p>Tries to create edges between the source node and all other edges, directed or undirected.</p>
@@ -201,6 +247,7 @@ public interface GraphElementsController {
     /**
      * Merges 2 or more nodes into a new one node that has all the edges of the merged nodes.
      * An AttributeRowsMergeStrategy must be provided for each column of the nodes.
+     * @param graph Graph that contains the nodes
      * @param nodes Nodes to merge (at least 1)
      * @param selectedNode Main selected node of the nodes to merge (or null to use first node)
      * @param columns Columns to apply a merge strategy in each row
@@ -208,7 +255,7 @@ public interface GraphElementsController {
      * @param deleteMergedNodes Indicates if merged nodes should be deleted
      * @return New resulting node
      */
-    Node mergeNodes(Node[] nodes, Node selectedNode, Column[] columns, AttributeRowsMergeStrategy[] mergeStrategies, boolean deleteMergedNodes);
+    Node mergeNodes(Graph graph, Node[] nodes, Node selectedNode, Column[] columns, AttributeRowsMergeStrategy[] mergeStrategies, boolean deleteMergedNodes);
 
     /**
      * Sets the fixed state of a node to the indicated.

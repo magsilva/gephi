@@ -55,10 +55,12 @@ import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
 import javax.xml.stream.events.XMLEvent;
 import org.gephi.graph.api.GraphController;
+import org.gephi.graph.api.GraphModel;
 import org.gephi.layout.api.LayoutModel;
 import org.gephi.layout.spi.Layout;
 import org.gephi.layout.spi.LayoutBuilder;
 import org.gephi.layout.spi.LayoutProperty;
+import org.gephi.project.api.Workspace;
 import org.gephi.utils.Serialization;
 import org.gephi.utils.longtask.api.LongTaskErrorHandler;
 import org.gephi.utils.longtask.api.LongTaskExecutor;
@@ -78,12 +80,14 @@ public class LayoutModelImpl implements LayoutModel {
     private final Map<LayoutPropertyKey, Object> savedProperties;
     private Layout selectedLayout;
     private LayoutBuilder selectedBuilder;
+    private final Workspace workspace;
     //Util
     private final LongTaskExecutor executor;
 
-    public LayoutModelImpl() {
-        listeners = new ArrayList<PropertyChangeListener>();
-        savedProperties = new HashMap<LayoutPropertyKey, Object>();
+    public LayoutModelImpl(Workspace workspace) {
+        this.workspace = workspace;
+        listeners = new ArrayList<>();
+        savedProperties = new HashMap<>();
 
         executor = new LongTaskExecutor(true, "layout", 5);
         executor.setLongTaskListener(new LongTaskListener() {
@@ -113,6 +117,9 @@ public class LayoutModelImpl implements LayoutModel {
     @Override
     public Layout getLayout(LayoutBuilder layoutBuilder) {
         Layout layout = layoutBuilder.buildLayout();
+        GraphController graphController = Lookup.getDefault().lookup(GraphController.class);
+        GraphModel graphModel = graphController.getGraphModel(workspace);
+        layout.setGraphModel(graphModel);
         selectedBuilder = layoutBuilder;
         layout.resetPropertiesValues();
         return layout;
@@ -135,8 +142,8 @@ public class LayoutModelImpl implements LayoutModel {
 
     public void injectGraph() {
         GraphController graphController = Lookup.getDefault().lookup(GraphController.class);
-        if (selectedLayout != null && graphController.getGraphModel() != null) {
-            selectedLayout.setGraphModel(graphController.getGraphModel());
+        if (selectedLayout != null && graphController.getGraphModel(workspace) != null) {
+            selectedLayout.setGraphModel(graphController.getGraphModel(workspace));
         }
     }
 
@@ -193,7 +200,7 @@ public class LayoutModelImpl implements LayoutModel {
     }
 
     public void loadProperties(Layout layout) {
-        List<LayoutPropertyKey> layoutValues = new ArrayList<LayoutPropertyKey>();
+        List<LayoutPropertyKey> layoutValues = new ArrayList<>();
         for (LayoutPropertyKey val : savedProperties.keySet()) {
             if (val.layoutClassName.equals(layout.getClass().getName())) {
                 layoutValues.add(val);
@@ -253,8 +260,6 @@ public class LayoutModelImpl implements LayoutModel {
     }
 
     public void writeXML(XMLStreamWriter writer) throws XMLStreamException {
-        writer.writeStartElement("layoutmodel");
-
         if (selectedLayout != null) {
             saveProperties(selectedLayout);
             writer.writeStartElement("selectedlayoutbuilder");
@@ -274,8 +279,6 @@ public class LayoutModelImpl implements LayoutModel {
                 writer.writeEndElement();
             }
         }
-
-        writer.writeEndElement();
 
         writer.writeEndElement();
     }

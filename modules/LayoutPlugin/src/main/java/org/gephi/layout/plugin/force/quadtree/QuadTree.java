@@ -53,6 +53,7 @@ import org.gephi.graph.api.GraphView;
 import org.gephi.graph.api.Interval;
 import org.gephi.graph.api.Node;
 import org.gephi.graph.api.NodeProperties;
+import org.gephi.graph.api.Table;
 import org.gephi.graph.api.TextProperties;
 import org.gephi.graph.spi.LayoutData;
 
@@ -113,7 +114,7 @@ public class QuadTree implements Node {
     private void divideTree() {
         float childSize = size / 2;
 
-        children = new ArrayList<QuadTree>();
+        children = new ArrayList<>();
         children.add(new QuadTree(posX + childSize, posY + childSize,
                 childSize, maxLevel - 1));
         children.add(new QuadTree(posX, posY + childSize,
@@ -472,6 +473,11 @@ public class QuadTree implements Node {
     @Override
     public Interval[] getIntervals() {
         throw new UnsupportedOperationException("Not supported.");
+    }
+
+    @Override
+    public Table getTable() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     class FirstAdd implements AddBehaviour {

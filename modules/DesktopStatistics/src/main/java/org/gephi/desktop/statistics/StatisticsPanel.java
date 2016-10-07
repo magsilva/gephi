@@ -96,7 +96,7 @@ public class StatisticsPanel extends JPanel {
         squeezeBoxPanel.cleanPanels();
         for (StatisticsCategory category : categories) {
             //Find uis in this category
-            List<UIFrontEnd> uis = new ArrayList<UIFrontEnd>();
+            List<UIFrontEnd> uis = new ArrayList<>();
             for (UIFrontEnd uife : frontEnds) {
                 if (uife.getCategory().equals(category) && uife.isVisible()) {
                     uis.add(uife);
@@ -107,6 +107,7 @@ public class StatisticsPanel extends JPanel {
                 //Sort it by position
                 Collections.sort(uis, new Comparator() {
 
+                    @Override
                     public int compare(Object o1, Object o2) {
                         Integer p1 = ((UIFrontEnd) o1).getStatisticsUI().getPosition();
                         Integer p2 = ((UIFrontEnd) o2).getStatisticsUI().getPosition();
@@ -131,11 +132,11 @@ public class StatisticsPanel extends JPanel {
     private void initFrontEnds() {
 
         StatisticsUI[] statisticsUIs = Lookup.getDefault().lookupAll(StatisticsUI.class).toArray(new StatisticsUI[0]);
-        frontEnds = new ArrayList<UIFrontEnd>();
+        frontEnds = new ArrayList<>();
 
         for (StatisticsCategory category : categories) {
             //Find uis in this category
-            List<StatisticsUI> uis = new ArrayList<StatisticsUI>();
+            List<StatisticsUI> uis = new ArrayList<>();
             for (StatisticsUI sui : statisticsUIs) {
                 if (sui.getCategory().equals(category.getName())) {
                     uis.add(sui);
@@ -146,6 +147,7 @@ public class StatisticsPanel extends JPanel {
                 //Sort it by position
                 Collections.sort(uis, new Comparator() {
 
+                    @Override
                     public int compare(Object o1, Object o2) {
                         Integer p1 = ((StatisticsUI) o1).getPosition();
                         Integer p2 = ((StatisticsUI) o2).getPosition();
@@ -171,7 +173,7 @@ public class StatisticsPanel extends JPanel {
     }
 
     private void initCategories() {
-        Map<String, StatisticsCategory> cats = new LinkedHashMap<String, StatisticsCategory>();
+        Map<String, StatisticsCategory> cats = new LinkedHashMap<>();
         cats.put(StatisticsUI.CATEGORY_NETWORK_OVERVIEW, new StatisticsCategory(StatisticsUI.CATEGORY_NETWORK_OVERVIEW, 100));
         cats.put(StatisticsUI.CATEGORY_NODE_OVERVIEW, new StatisticsCategory(StatisticsUI.CATEGORY_NODE_OVERVIEW, 200));
         cats.put(StatisticsUI.CATEGORY_EDGE_OVERVIEW, new StatisticsCategory(StatisticsUI.CATEGORY_EDGE_OVERVIEW, 300));

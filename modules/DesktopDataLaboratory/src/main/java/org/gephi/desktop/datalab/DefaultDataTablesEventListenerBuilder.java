@@ -41,6 +41,12 @@ Portions Copyrighted 2011 Gephi Consortium.
  */
 package org.gephi.desktop.datalab;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.SwingUtilities;
 import org.gephi.datalab.api.datatables.DataTablesEventListener;
 import org.gephi.datalab.api.datatables.DataTablesEventListenerBuilder;
 import org.openide.util.lookup.ServiceProvider;
@@ -48,13 +54,34 @@ import org.openide.windows.WindowManager;
 
 /**
  * Provides default instance of DataTableTopComponent as DataTablesEventListener
+ *
  * @author Eduardo
  */
-@ServiceProvider(service=DataTablesEventListenerBuilder.class)
-public class DefaultDataTablesEventListenerBuilder implements DataTablesEventListenerBuilder{
+@ServiceProvider(service = DataTablesEventListenerBuilder.class)
+public class DefaultDataTablesEventListenerBuilder implements DataTablesEventListenerBuilder {
 
     @Override
     public DataTablesEventListener getDataTablesEventListener() {
-        return (DataTableTopComponent)WindowManager.getDefault().findTopComponent("DataTableTopComponent");
+        if (SwingUtilities.isEventDispatchThread()) {
+            return (DataTableTopComponent) WindowManager.getDefault().findTopComponent("DataTableTopComponent");
+        } else {
+            final List<DataTableTopComponent> listenerHolder = new ArrayList<>();
+            try {
+                //We have to do this in AWT thread...
+                //There is no support for Futures as far as I know
+                SwingUtilities.invokeAndWait(new Runnable() {
+                    @Override
+                    public void run() {
+                        listenerHolder.add((DataTableTopComponent) WindowManager.getDefault().findTopComponent("DataTableTopComponent"));
+                    }
+                });
+            } catch (InterruptedException ex) {
+                Logger.getLogger("").log(Level.SEVERE, null, ex);
+            } catch (InvocationTargetException ex) {
+                Logger.getLogger("").log(Level.SEVERE, null, ex);
+            }
+
+            return listenerHolder.get(0);
+        }
     }
 }

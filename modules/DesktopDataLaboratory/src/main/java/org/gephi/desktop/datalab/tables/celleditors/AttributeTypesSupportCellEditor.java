@@ -48,12 +48,15 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.border.Border;
 import javax.swing.border.LineBorder;
+import org.gephi.desktop.datalab.utils.GraphModelProvider;
+import org.gephi.desktop.datalab.utils.stringconverters.DoubleStringConverter;
 import org.gephi.graph.api.AttributeUtils;
 import org.gephi.graph.api.TimeFormat;
 import org.gephi.graph.api.types.IntervalMap;
 import org.gephi.graph.api.types.IntervalSet;
 import org.gephi.graph.api.types.TimestampMap;
 import org.gephi.graph.api.types.TimestampSet;
+import org.joda.time.DateTimeZone;
 
 /**
  *
@@ -62,6 +65,8 @@ import org.gephi.graph.api.types.TimestampSet;
 public class AttributeTypesSupportCellEditor extends DefaultCellEditor {
 
     private static final Border RED_BORDER = new LineBorder(Color.red);
+
+    private final GraphModelProvider graphModelProvider;
     
     private final JTextField textField;
     private final Border originalBorder;
@@ -70,26 +75,32 @@ public class AttributeTypesSupportCellEditor extends DefaultCellEditor {
     private final boolean isTimestampMapType;
     private final boolean isIntervalSetType;
     private final boolean isIntervalMapType;
-    
-    private TimeFormat timeFormat = TimeFormat.DOUBLE;
+    private final boolean isArrayType;
+    private final boolean isDecimalType;
 
-    public AttributeTypesSupportCellEditor(Class<?> typeClass) {
+    public AttributeTypesSupportCellEditor(GraphModelProvider graphModelProvider, Class<?> typeClass) {
         super(new JTextField());
+        this.graphModelProvider = graphModelProvider;
         this.typeClass = typeClass;
-        
+
         textField = new JTextField();
         originalBorder = textField.getBorder();
-        
+
         isTimestampSetType = TimestampSet.class.isAssignableFrom(typeClass);
         isTimestampMapType = TimestampMap.class.isAssignableFrom(typeClass);
         isIntervalSetType = IntervalSet.class.isAssignableFrom(typeClass);
         isIntervalMapType = IntervalMap.class.isAssignableFrom(typeClass);
+        isArrayType = typeClass.isArray();
+        isDecimalType = typeClass.equals(Double.class)
+                || typeClass.equals(double.class)
+                || typeClass.equals(Float.class)
+                || typeClass.equals(float.class);
     }
 
     @Override
     public boolean stopCellEditing() {
         String value = getCellEditorValue().toString();
-        if(!value.trim().isEmpty()){
+        if (!value.trim().isEmpty()) {
             try {
                 AttributeUtils.parse(value, typeClass);
             } catch (Exception e) {
@@ -97,7 +108,7 @@ public class AttributeTypesSupportCellEditor extends DefaultCellEditor {
                 return false;//Invalid value for type
             }
         }
-        
+
         return super.stopCellEditing();
     }
 
@@ -110,35 +121,31 @@ public class AttributeTypesSupportCellEditor extends DefaultCellEditor {
     public Component getTableCellEditorComponent(JTable table,
             Object value, boolean isSelected, int row, int column) {
 
+        TimeFormat timeFormat = graphModelProvider.getGraphModel().getTimeFormat();
+        DateTimeZone timeZone = graphModelProvider.getGraphModel().getTimeZone();
+        
         String valueStr;
         if (value == null) {
             valueStr = "";
-        }else{
-            if(isTimestampSetType){
-                valueStr = ((TimestampSet) value).toString(timeFormat);
-            }else if(isTimestampMapType){
-                valueStr = ((TimestampMap) value).toString(timeFormat);
-            }else if(isIntervalSetType){
-                valueStr = ((IntervalSet) value).toString(timeFormat);
-            }else if(isIntervalMapType){
-                valueStr = ((IntervalMap) value).toString(timeFormat);
-            }else{
-                valueStr = value.toString();
-            }
+        } else if (isTimestampSetType) {
+            valueStr = ((TimestampSet) value).toString(timeFormat, timeZone);
+        } else if (isTimestampMapType) {
+            valueStr = ((TimestampMap) value).toString(timeFormat, timeZone);
+        } else if (isIntervalSetType) {
+            valueStr = ((IntervalSet) value).toString(timeFormat, timeZone);
+        } else if (isIntervalMapType) {
+            valueStr = ((IntervalMap) value).toString(timeFormat, timeZone);
+        } else if (isArrayType) {
+            valueStr = AttributeUtils.printArray(value);
+        } else if (isDecimalType) {
+            valueStr = DoubleStringConverter.FORMAT.format(value);
+        } else {
+            valueStr = AttributeUtils.print(value, timeFormat, timeZone);
         }
-        
 
         textField.setBorder(originalBorder);
         textField.setEditable(true);
         textField.setText(valueStr);
         return textField;
-    }
-
-    public TimeFormat getTimeFormat() {
-        return timeFormat;
-    }
-
-    public void setTimeFormat(TimeFormat timeFormat) {
-        this.timeFormat = timeFormat;
     }
 }

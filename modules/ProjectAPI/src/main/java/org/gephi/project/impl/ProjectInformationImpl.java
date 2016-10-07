@@ -58,7 +58,8 @@ public class ProjectInformationImpl implements ProjectInformation {
     public enum Status {
 
         NEW, OPEN, CLOSED, INVALID
-    };
+    }
+
     //Data
     private final Project project;
     private String name;
@@ -70,7 +71,7 @@ public class ProjectInformationImpl implements ProjectInformation {
     public ProjectInformationImpl(Project project, String name) {
         this.project = project;
         this.name = name;
-        listeners = new ArrayList<PropertyChangeListener>();
+        listeners = new ArrayList<>();
         status = Status.CLOSED;
     }
 

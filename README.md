@@ -30,25 +30,25 @@ If you run into any trouble or have questions consult our [forum](http://forum.g
 
 ### Nightly builds
 
-Current version is 0.9-SNAPSHOT
+Current version is 0.9.2-SNAPSHOT
 
-- [gephi-0.9-SNAPSHOT-windows.exe](http://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9-SNAPSHOT&c=windows&p=exe) (Windows)
+- [gephi-0.9.2-SNAPSHOT-windows.exe](http://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9.2-SNAPSHOT&c=windows&p=exe) (Windows)
 
-- [gephi-0.9-SNAPSHOT-macos.dmg](http://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9-SNAPSHOT&c=macos&p=dmg) (Mac OS X)
+- [gephi-0.9.2-SNAPSHOT-macos.dmg](http://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9.2-SNAPSHOT&c=macos&p=dmg) (Mac OS X)
 
-- [gephi-0.9-SNAPSHOT-linux.tar.gz](https://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9-SNAPSHOT&c=linux&p=tar.gz) (Linux)
+- [gephi-0.9.2-SNAPSHOT-linux.tar.gz](https://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9.2-SNAPSHOT&c=linux&p=tar.gz) (Linux)
 
-- [gephi-0.9-SNAPSHOT-sources.tar.gz](https://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9-SNAPSHOT&c=sources&p=tar.gz) (Sources)
+- [gephi-0.9.2-SNAPSHOT-sources.tar.gz](https://oss.sonatype.org/service/local/artifact/maven/content?r=snapshots&g=org.gephi&a=gephi&v=0.9.2-SNAPSHOT&c=sources&p=tar.gz) (Sources)
 
 ## Developer Introduction
 
 Gephi is developed in Java and uses OpenGL for its visualization engine. Built on the top of Netbeans Platform, it follows a loosely-coupled, modular architecture philosophy. Gephi is split into modules, which depend on other modules through well-written APIs. Plugins can reuse existing APIs, create new services and even replace a default implementation with a new one.
 
-Consult the [**Javadoc**](http://gephi.github.io/gephi/0.9-SNAPSHOT/apidocs/index.html) for an overview of the APIs.
+Consult the [**Javadoc**](http://gephi.github.io/gephi/0.9.1/apidocs/index.html) for an overview of the APIs.
 
 ### Requirements
 
-- Java JDK 6, 7 or 8 with preferably [Oracle Java JDK](http://java.com/en/).
+- Java JDK 7 or 8 with preferably [Oracle Java JDK](http://java.com/en/).
 
 - [Apache Maven](http://maven.apache.org/) version 3.2.2 or later
 

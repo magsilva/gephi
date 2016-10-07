@@ -38,7 +38,7 @@ made subject to such option by the copyright holder.
 Contributor(s):
 
 Portions Copyrighted 2011 Gephi Consortium.
-*/
+ */
 package org.gephi.desktop.filters;
 
 import java.util.ArrayList;
@@ -47,7 +47,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.gephi.filters.api.Query;
 import org.gephi.filters.spi.Category;
-import org.gephi.filters.spi.Filter;
+import org.gephi.project.api.Workspace;
 
 /**
  *
@@ -55,17 +55,23 @@ import org.gephi.filters.spi.Filter;
  */
 public final class FilterUIModel {
 
+    private final Workspace workspace;
     private Query selectedQuery;
-    private List<Query> expandedQueryNodes;
-    private List<Query> expandedParametersNodes;
-    private List<Category> expandedCategoryNodes;
-    private List<ChangeListener> listeners;
+    private final List<Query> expandedQueryNodes;
+    private final List<Query> expandedParametersNodes;
+    private final List<Category> expandedCategoryNodes;
+    private final List<ChangeListener> listeners;
 
-    public FilterUIModel() {
-        listeners = new ArrayList<ChangeListener>();
-        expandedQueryNodes = new ArrayList<Query>();
-        expandedCategoryNodes = new ArrayList<Category>();
-        expandedParametersNodes = new ArrayList<Query>();
+    public FilterUIModel(Workspace workspace) {
+        this.workspace = workspace;
+        listeners = new ArrayList<>();
+        expandedQueryNodes = new ArrayList<>();
+        expandedCategoryNodes = new ArrayList<>();
+        expandedParametersNodes = new ArrayList<>();
+    }
+
+    public Workspace getWorkspace() {
+        return workspace;
     }
 
     public Query getSelectedQuery() {

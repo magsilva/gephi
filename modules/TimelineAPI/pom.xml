@@ -4,13 +4,13 @@
     <parent>
         <artifactId>gephi-parent</artifactId>
         <groupId>org.gephi</groupId>
-        <version>0.9-SNAPSHOT</version>
-		<relativePath>../..</relativePath>
+        <version>0.9.2-SNAPSHOT</version>
+        <relativePath>../..</relativePath>
     </parent>
 
     <groupId>org.gephi</groupId>
-    <artifactId>timeline</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <artifactId>timeline-api</artifactId>
+    <version>0.9.2-SNAPSHOT</version>
     <packaging>nbm</packaging>
 
     <name>TimelineAPI</name>
@@ -18,11 +18,15 @@
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>data-attributes-api</artifactId>
+            <artifactId>graph-api</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>graph-api</artifactId>
+            <artifactId>filters-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>filters-plugin</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>

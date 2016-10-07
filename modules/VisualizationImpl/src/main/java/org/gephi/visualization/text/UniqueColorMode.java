@@ -48,6 +48,7 @@ import org.gephi.visualization.model.TextModel;
 import org.gephi.visualization.model.edge.EdgeModel;
 import org.gephi.visualization.model.node.NodeModel;
 import org.gephi.visualization.text.TextManager.Renderer;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -55,7 +56,7 @@ import org.gephi.visualization.text.TextManager.Renderer;
  */
 public class UniqueColorMode implements ColorMode {
 
-    private VizConfig vizConfig;
+    private final VizConfig vizConfig;
     private float[] color;
 
     public UniqueColorMode() {
@@ -81,34 +82,25 @@ public class UniqueColorMode implements ColorMode {
 
     @Override
     public void textEdgeColor(Renderer renderer, EdgeModel edgeModel) {
-        textColor(renderer, edgeModel, edgeModel.isSelected());
+        textColor(renderer, edgeModel, edgeModel.isSelected() || edgeModel.isAutoSelected());
     }
 
     public void textColor(Renderer renderer, TextModel text, boolean selected) {
-        if (text.hasCustomTextColor()) {
-            if (vizConfig.isLightenNonSelected()) {
-                if (!selected) {
-                    float lightColorFactor = 1 - vizConfig.getLightenNonSelectedFactor();
-                    renderer.setColor(text.getTextR(), text.getTextG(), text.getTextB(), lightColorFactor);
-                } else {
-                    renderer.setColor(text.getTextR(), text.getTextG(), text.getTextB(), 1);
-                }
-            } else {
-                renderer.setColor(text.getTextR(), text.getTextG(), text.getTextB(), text.getTextAlpha());
-            }
-        } else if (vizConfig.isLightenNonSelected()) {
+        if (vizConfig.isLightenNonSelected()) {
             if (!selected) {
                 float lightColorFactor = 1 - vizConfig.getLightenNonSelectedFactor();
                 renderer.setColor(color[0], color[1], color[2], lightColorFactor);
             } else {
                 renderer.setColor(color[0], color[1], color[2], 1);
             }
+        } else {
+            renderer.setColor(color[0], color[1], color[2], 1);
         }
     }
 
     @Override
     public String getName() {
-        return "Unique";
+        return NbBundle.getMessage(UniqueColorMode.class, "UniqueColorMode.name");
     }
 
     @Override

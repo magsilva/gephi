@@ -38,16 +38,18 @@ made subject to such option by the copyright holder.
 Contributor(s):
 
 Portions Copyrighted 2011 Gephi Consortium.
-*/
+ */
 package org.gephi.filters.spi;
 
+import org.gephi.project.api.Workspace;
+
 /**
- * Category builder is a convenient way to define multiple builders from a single
- * source and grouped in a single category.
+ * Category builder is a convenient way to define multiple builders from a
+ * single source and grouped in a single category.
  * <p>
- * Implement <code>CategoryBuilder</code>
- * for instance for creating a set of filter builders working on attributes, with
- * one <code>FilterBuilder</code> per attribute column.
+ * Implement <code>CategoryBuilder</code> for instance for creating a set of
+ * filter builders working on attributes, with one <code>FilterBuilder</code>
+ * per attribute column.
  * <p>
  * Note that filter builders returned by category builders don't have to be
  * registered on they own, once here is enough.
@@ -59,14 +61,17 @@ public interface CategoryBuilder {
 
     /**
      * Returns the filter builders this category builder is building.
-     * @return  the builders this category builder is building
+     *
+     * @param workspace workspace
+     * @return the builders this category builder is building
      */
-    public FilterBuilder[] getBuilders();
+    public FilterBuilder[] getBuilders(Workspace workspace);
 
     /**
-     * Returns the category builders are to be grouped in. It can't be a
-     * default category.
-     * @return  the category builders belong to
+     * Returns the category builders are to be grouped in. It can't be a default
+     * category.
+     *
+     * @return the category builders belong to
      */
     public Category getCategory();
 }

@@ -4,13 +4,13 @@
     <parent>
         <artifactId>gephi-parent</artifactId>
         <groupId>org.gephi</groupId>
-        <version>0.9-SNAPSHOT</version>
+        <version>0.9.2-SNAPSHOT</version>
         <relativePath>../..</relativePath>
     </parent>
 
     <groupId>org.gephi</groupId>
     <artifactId>graph-api</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <version>0.9.2-SNAPSHOT</version>
     <packaging>nbm</packaging>
 
     <name>GraphAPI</name>
@@ -23,7 +23,7 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>graphstore</artifactId>
-            <version>0.4.2</version>
+            <version>${graphstore.version}</version>
         </dependency>
         <dependency>
             <groupId>org.netbeans.api</groupId>

@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.gephi</groupId>
         <artifactId>gephi-parent</artifactId>
-        <version>0.9-SNAPSHOT</version>
+        <version>0.9.2-SNAPSHOT</version>
         <relativePath>../..</relativePath>
     </parent>
 
@@ -249,14 +249,6 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>settings-upgrader</artifactId>
         </dependency>
-        <!--        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>spigot-plugin</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>spigot-plugin-ui</artifactId>
-        </dependency>-->
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>statistics-api</artifactId>
@@ -269,11 +261,10 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>statistics-plugin-ui</artifactId>
         </dependency>
-        <!--        <dependency>
-                     <groupId>${project.groupId}</groupId>
-                    <artifactId>timeline</artifactId>
-                </dependency>
-        -->        
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>timeline-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>tools-api</artifactId>
@@ -342,10 +333,10 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-statistics</artifactId>
         </dependency>
-<!--        <dependency>
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>filters-api</artifactId>
-        </dependency>-->
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>ui-propertyeditor</artifactId>
@@ -354,10 +345,6 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>layout-plugin</artifactId>
         </dependency>
-        <!--        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>desktop-spigot</artifactId>
-        </dependency>-->
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-generate</artifactId>
@@ -378,14 +365,14 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>io-importer-plugin</artifactId>
         </dependency>
-<!--        <dependency>
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>filters-plugin</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>filters-impl</artifactId>
-        </dependency>-->
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>export-plugin-ui</artifactId>
@@ -414,18 +401,14 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>datalab-plugin</artifactId>
         </dependency>
-<!--        <dependency>
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>filters-plugin-ui</artifactId>
-        </dependency>-->
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-layout</artifactId>
         </dependency>
-        <!--        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>dynamic-impl</artifactId>
-        </dependency>-->
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-import</artifactId>
@@ -445,19 +428,19 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-tools</artifactId>
-        </dependency><!--
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-timeline</artifactId>
-        </dependency>-->
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>directory-chooser</artifactId>
         </dependency>
-<!--        <dependency>
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>desktop-filters</artifactId>
-        </dependency>-->
+        </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>core-library-wrapper</artifactId>
@@ -660,6 +643,62 @@
             </build>
         </profile>
 
+        <!-- Profile used along with targz and windows exe to replace the windows icon -->
+        <profile>
+            <id>replace-windows-icon</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>replace-windows-icon</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <!-- Target that replaces the icon for the launcher exe with our own icon. -->
+                                    <target name="replaceWindowsLauncherIcon" description="Replace the icon for the Windows launcher exe">
+                                        <!-- Windows -->
+                                        <echo message="Replacing icon of Windows launcher executable."/>
+                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephi.ico 0"/>
+                                        </exec>
+                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephifile.ico 1"/>
+                                        </exec>
+                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephi.ico 0"/>
+                                        </exec>
+                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephifile.ico 1"/>
+                                        </exec>
+
+                                        <!-- Linux (assuming the right wine configuration) -->
+                                        <echo message="Replacing icon of Windows launcher executable."/>
+                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephi.ico 0"/>
+                                        </exec>
+                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephifile.ico 1"/>
+                                        </exec>
+                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephi.ico 0"/>
+                                        </exec>
+                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
+                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephifile.ico 1"/>
+                                        </exec>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
         <!-- Profile used along with deployment to create the tar.gz artifact -->
         <profile>
             <id>create-targz</id>
@@ -734,11 +773,12 @@
                                 <configuration>
                                     <target>
                                         <!-- Clean -->
-                                        <delete includeEmptyDirs="true" failonerror="false">
-                                            <fileset dir="${project.build.directory}/${gephi.appbundle.name}.app"/>
-                                            <fileset dir="${project.build.directory}/${gephi.app.title}"/>
-                                            <fileset dir="${project.build.directory}/${project.artifactId}-${project.version}.dmg"/>
+                                        <delete includeEmptyDirs="true" failonerror="false" removeNotFollowedSymlinks="true">
+                                            <fileset dir="${project.build.directory}/${gephi.appbundle.name}.app" followsymlinks="false"/>
+                                            <fileset dir="${project.build.directory}/${gephi.app.title}" followsymlinks="false"/>
+                                            <fileset dir="${project.build.directory}/${project.artifactId}-${project.version}.dmg" followsymlinks="false"/>
                                         </delete>
+                                        <delete file="${project.build.directory}/${project.artifactId}-${project.version}.dmg" failonerror="false"/>
                                 
                                         <!-- Create folders -->
                                         <mkdir dir="${project.build.directory}/${gephi.appbundle.name}.app"/>
@@ -928,47 +968,6 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-antrun-plugin</artifactId>
                         <executions>
-                            <execution>
-                                <id>replace-windows-icon</id>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>run</goal>
-                                </goals>
-                                <configuration>
-                                    <!-- Target that replaces the icon for the launcher exe with our own icon. -->
-                                    <target name="replaceWindowsLauncherIcon" description="Replace the icon for the Windows launcher exe">
-                                        <!-- Windows -->
-                                        <echo message="Replacing icon of Windows launcher executable."/>
-                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephi.ico 0"/>
-                                        </exec>
-                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephifile.ico 1"/>
-                                        </exec>
-                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephi.ico 0"/>
-                                        </exec>
-                                        <exec dir="src/main/app-resources" executable="ReplaceVistaIcon.exe" resolveexecutable="true" osfamily="windows">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephifile.ico 1"/>
-                                        </exec>
-
-                                        <!-- Linux (assuming the right wine configuration) -->
-                                        <echo message="Replacing icon of Windows launcher executable."/>
-                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephi.ico 0"/>
-                                        </exec>
-                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}.exe gephifile.ico 1"/>
-                                        </exec>
-                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephi.ico 0"/>
-                                        </exec>
-                                        <exec dir="src/main/app-resources" executable="replacevistaicon" os="Linux">
-                                            <arg line="${project.build.directory}/${brandingToken}/bin/${brandingToken}64.exe gephifile.ico 1"/>
-                                        </exec>
-                                    </target>
-                                </configuration>
-                            </execution>
                             <execution>
                                 <id>create-windows-installer</id>
                                 <phase>package</phase>

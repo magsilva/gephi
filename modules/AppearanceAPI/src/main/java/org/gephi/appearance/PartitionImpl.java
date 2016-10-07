@@ -42,41 +42,25 @@
 package org.gephi.appearance;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.gephi.appearance.api.Partition;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Index;
 
 /**
  *
  * @author mbastian
  */
-public class PartitionImpl implements Partition {
+public abstract class PartitionImpl implements Partition {
 
-    private final Index index;
-    private final Column column;
-    private final Map<Object, Color> colorMap;
+    protected final Map<Object, Color> colorMap;
 
-    public PartitionImpl(Column column, Index index) {
-        this.column = column;
-        this.index = index;
-        this.colorMap = new HashMap<Object, Color>();
-    }
-
-    @Override
-    public Iterable getValues() {
-        return index.values(column);
-    }
-
-    @Override
-    public int getElementCount() {
-        return index.countElements(column);
-    }
-
-    @Override
-    public int count(Object value) {
-        return index.count(column, value);
+    protected PartitionImpl() {
+        this.colorMap = new HashMap<>();
     }
 
     @Override
@@ -90,40 +74,30 @@ public class PartitionImpl implements Partition {
     }
 
     @Override
-    public float percentage(Object value) {
-        int count = index.count(column, value);
-        return (float) count / index.countElements(column);
-    }
-
-    @Override
-    public int size() {
-        return index.countValues(column);
-    }
-
-    @Override
-    public Column getColumn() {
-        return column;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 3;
-        hash = 23 * hash + (this.column != null ? this.column.hashCode() : 0);
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
+    public void setColors(Color[] colors) {
+        Collection c = getSortedValues();
+        if (c.size() != colors.length) {
+            throw new IllegalArgumentException("The colors size must match the partition size");
         }
-        if (getClass() != obj.getClass()) {
-            return false;
+        int i = 0;
+        for (Object o : c) {
+            setColor(o, colors[i++]);
         }
-        final PartitionImpl other = (PartitionImpl) obj;
-        if (this.column != other.column && (this.column == null || !this.column.equals(other.column))) {
-            return false;
-        }
-        return true;
+    }
+
+    protected abstract void refresh();
+
+    @Override
+    public Collection getSortedValues() {
+        List values = new ArrayList(getValues());
+        Collections.sort(values, new Comparator() {
+            @Override
+            public int compare(Object o1, Object o2) {
+                float p1 = percentage(o1);
+                float p2 = percentage(o2);
+                return p1 > p2 ? -1 : p1 < p2 ? 1 : 0;
+            }
+        });
+        return values;
     }
 }

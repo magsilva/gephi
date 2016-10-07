@@ -41,6 +41,7 @@
  */
 package org.gephi.io.exporter.plugin;
 
+import java.awt.Color;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.logging.Level;
@@ -212,6 +213,10 @@ public class ExporterGML implements GraphExporter, CharacterExporter, LongTask {
                 printTag("directed 0");
             }
         }
+        if (exportColor && edge.alpha() != 0f) {
+            Color color = edge.getColor();
+            printTag("fill \"" + String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue()) + "\"");
+        }
 
         if (exportNotRecognizedElements) {
             for (Column col : graphModel.getEdgeTable()) {
@@ -259,8 +264,8 @@ public class ExporterGML implements GraphExporter, CharacterExporter, LongTask {
                 }
             }
             if (exportColor) {
-                printTag("fill \"#" + Integer.toString((int) (node.r() * 255), 16)
-                        + Integer.toString((int) (node.g() * 255), 16) + Integer.toString((int) (node.b() * 255), 16) + "\"");
+                Color color = node.getColor();
+                printTag("fill \"" + String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue()) + "\"");
             }
             printClose();
         }
@@ -399,7 +404,6 @@ public class ExporterGML implements GraphExporter, CharacterExporter, LongTask {
      * @return formated title
      */
     private String formatTitle(String s) {
-        System.err.println("Title " + s);
         String res = s.replace("\"", "").replace("\'", "").replace("[", "").replace("]", "").replace(" ", "").replace("#", "");
         if (s.charAt(0) >= '0' && s.charAt(0) <= '9') {
             return ("column" + res);

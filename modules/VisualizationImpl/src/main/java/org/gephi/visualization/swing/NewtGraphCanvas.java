@@ -43,14 +43,13 @@ package org.gephi.visualization.swing;
 
 import com.jogamp.newt.awt.NewtCanvasAWT;
 import com.jogamp.newt.opengl.GLWindow;
-import com.jogamp.opengl.util.gl2.GLUT;
-import java.awt.Component;
 import com.jogamp.opengl.GL2;
 import com.jogamp.opengl.glu.GLU;
-import java.awt.Dimension;
-import java.awt.Point;
+import com.jogamp.opengl.util.gl2.GLUT;
+import java.awt.Component;
 import javax.swing.JPopupMenu;
 import javax.swing.ToolTipManager;
+import org.gephi.ui.utils.UIUtils;
 
 /**
  *
@@ -67,10 +66,11 @@ public class NewtGraphCanvas extends GLAbstractListener {
         glWindow = GLWindow.create(getCaps());
 //        glWindow.setSurfaceScale(new float[]{ScalableSurface.AUTOMAX_PIXELSCALE, ScalableSurface.AUTOMAX_PIXELSCALE});
         glCanvas = new NewtCanvasAWT(glWindow);
+
         super.initDrawable(glWindow);
-        glCanvas.setFocusable(true);
-        glCanvas.setIgnoreRepaint(true);
-        glCanvas.setMinimumSize(new Dimension(0, 0));   //Fix Canvas resize Issue
+//        glCanvas.setFocusable(true);
+//        glCanvas.setIgnoreRepaint(true);
+//        glCanvas.setMinimumSize(new Dimension(0, 0));   //Fix Canvas resize Issue
 
 //        glCanvas.setMinimumSize(new Dimension(0, 0));   //Fix Canvas resize Issue
         //Basic init
@@ -83,13 +83,21 @@ public class NewtGraphCanvas extends GLAbstractListener {
         ToolTipManager.sharedInstance().setLightWeightPopupEnabled(false);
     }
 
-    public GLWindow getWindow() {
-        return glWindow;
-    }
-
     @Override
     protected void init(GL2 gl) {
         globalScale = glWindow.getCurrentSurfaceScale(new float[2])[0];
+
+        engine.startDisplay();
+    }
+
+    @Override
+    public void reinitWindow() {
+        if (UIUtils.isAquaLookAndFeel()) {
+            // Only used when collapse panel is set visible
+            // Workaround for JOGL bug 1274
+            glCanvas.setNEWTChild(null);
+            glCanvas.setNEWTChild(glWindow);
+        }
     }
 
     @Override

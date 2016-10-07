@@ -44,8 +44,6 @@ package org.gephi.ui.filters.plugin.partition;
 import javax.swing.JPanel;
 import org.gephi.filters.plugin.partition.PartitionBuilder.PartitionFilter;
 import org.gephi.filters.plugin.partition.PartitionUI;
-
-
 import org.openide.util.lookup.ServiceProvider;
 
 /**
@@ -55,6 +53,7 @@ import org.openide.util.lookup.ServiceProvider;
 @ServiceProvider(service = PartitionUI.class)
 public class PartitionUIImpl implements PartitionUI {
 
+    @Override
     public JPanel getPanel(PartitionFilter filter) {
         PartitionPanel panel = new PartitionPanel();
         panel.setup(filter);

@@ -65,7 +65,7 @@ import org.openide.util.Lookup;
 public class AvailableStatisticsChooser extends javax.swing.JPanel {
 
     private final JSqueezeBoxPanel squeezeBoxPanel = new JSqueezeBoxPanel();
-    private final Map<JCheckBox, StatisticsUI> uiMap = new HashMap<JCheckBox, StatisticsUI>();
+    private final Map<JCheckBox, StatisticsUI> uiMap = new HashMap<>();
 
     public AvailableStatisticsChooser() {
         initComponents();
@@ -77,6 +77,7 @@ public class AvailableStatisticsChooser extends javax.swing.JPanel {
         //Sort categories by position
         Arrays.sort(categories, new Comparator() {
 
+            @Override
             public int compare(Object o1, Object o2) {
                 Integer p1 = ((StatisticsCategory) o1).getPosition();
                 Integer p2 = ((StatisticsCategory) o2).getPosition();
@@ -94,7 +95,7 @@ public class AvailableStatisticsChooser extends javax.swing.JPanel {
             JPanel innerPanel = new JPanel(migLayout);
 
             //Find uis in this category
-            List<StatisticsUI> uis = new ArrayList<StatisticsUI>();
+            List<StatisticsUI> uis = new ArrayList<>();
             for (StatisticsUI sui : statisticsUIs) {
                 if (sui.getCategory().equals(category.getName())) {
                     uis.add(sui);
@@ -104,6 +105,7 @@ public class AvailableStatisticsChooser extends javax.swing.JPanel {
             //Sort it by position
             Collections.sort(uis, new Comparator() {
 
+                @Override
                 public int compare(Object o1, Object o2) {
                     Integer p1 = ((StatisticsUI) o1).getPosition();
                     Integer p2 = ((StatisticsUI) o2).getPosition();

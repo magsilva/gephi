@@ -45,18 +45,20 @@ import com.jogamp.common.nio.Buffers;
 import com.jogamp.newt.event.MouseAdapter;
 import com.jogamp.newt.event.MouseEvent;
 import com.jogamp.newt.opengl.GLWindow;
-import java.awt.Color;
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import com.jogamp.opengl.GL2;
 import com.jogamp.opengl.GLAutoDrawable;
 import com.jogamp.opengl.GLCapabilities;
 import com.jogamp.opengl.GLEventListener;
 import com.jogamp.opengl.GLProfile;
 import com.jogamp.opengl.glu.GLU;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Point;
 import java.nio.DoubleBuffer;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.gephi.lib.gleem.linalg.Vec3f;
 import org.gephi.visualization.VizArchitecture;
 import org.gephi.visualization.VizController;
@@ -64,8 +66,8 @@ import org.gephi.visualization.VizModel;
 import org.gephi.visualization.apiimpl.GraphDrawable;
 import org.gephi.visualization.apiimpl.GraphIO;
 import org.gephi.visualization.apiimpl.Scheduler;
-import org.gephi.visualization.opengl.GraphicalConfiguration;
 import org.gephi.visualization.opengl.AbstractEngine;
+import org.gephi.visualization.opengl.GraphicalConfiguration;
 import org.openide.util.Exceptions;
 
 /**
@@ -105,7 +107,9 @@ public abstract class GLAbstractListener implements GLEventListener, VizArchitec
     protected float[] cameraTarget;
     protected double[] draggingMarker = new double[2];//The drag mesure for a moving of 1 to the viewport
     protected Vec3f cameraVector = new Vec3f();
-    protected MouseAdapter graphMouseAdapter;
+    protected MouseAdapter graphMouseAdapterNewt;
+    protected java.awt.event.MouseAdapter graphMouseAdapterCanvas;
+    protected GraphMouseAdapter graphMouseAdapter;
 
     public GLAbstractListener() {
         this.vizController = VizController.getInstance();
@@ -126,51 +130,37 @@ public abstract class GLAbstractListener implements GLEventListener, VizArchitec
         cameraTarget = vizController.getVizConfig().getDefaultCameraTarget();
 
         //Mouse events
-        if (window != null && vizController.getVizConfig().isReduceFpsWhenMouseOut()) {
-            final int minVal = vizController.getVizConfig().getReduceFpsWhenMouseOutValue();
-            final int maxVal = 30;
-            graphMouseAdapter = new MouseAdapter() {
-                private float lastTarget = 0.1f;
+        if (vizController.getVizConfig().isReduceFpsWhenMouseOut() || vizController.getVizConfig().isPauseLoopWhenMouseOut()) {
+            graphMouseAdapter = new GraphMouseAdapter();
+            if (window != null) {
+                graphMouseAdapterNewt = new MouseAdapter() {
 
-                @Override
-                public void mouseEntered(MouseEvent e) {
-                    if (!scheduler.isAnimating()) {
-                        engine.resumeDisplay();
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        graphMouseAdapter.mouseEntered();
                     }
-                    scheduler.setFps(maxVal);
-                    resetFpsAverage();
-                }
 
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    float fps = getFpsAverage();
-                    float target = (float) (fps / (1. / Math.sqrt(getFpsAverage()) * 10.));
-                    if (fps == 0f) {
-                        target = lastTarget;
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        graphMouseAdapter.mouseExited();
                     }
-                    if (target <= 0.005f) {
-                        engine.pauseDisplay();
-                    } else if (target > minVal) {
-                        target = minVal;
-                    }
-                    lastTarget = target;
-                    scheduler.setFps(target);
-                }
-            };
-            window.addMouseListener(graphMouseAdapter);
-        } else if (window != null && vizController.getVizConfig().isPauseLoopWhenMouseOut()) {
-            graphMouseAdapter = new MouseAdapter() {
-                @Override
-                public void mouseEntered(MouseEvent e) {
-                    engine.resumeDisplay();
-                }
+                };
+                window.addMouseListener(graphMouseAdapterNewt);
+            } else {
+                graphMouseAdapterCanvas = new java.awt.event.MouseAdapter() {
 
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    engine.pauseDisplay();
-                }
-            };
-            window.addMouseListener(graphMouseAdapter);
+                    @Override
+                    public void mouseEntered(java.awt.event.MouseEvent e) {
+                        graphMouseAdapter.mouseEntered();
+                    }
+
+                    @Override
+                    public void mouseExited(java.awt.event.MouseEvent e) {
+                        graphMouseAdapter.mouseExited();
+                    }
+                };
+                graphComponent.addMouseListener(graphMouseAdapterCanvas);
+            }
         }
     }
 
@@ -276,7 +266,7 @@ public abstract class GLAbstractListener implements GLEventListener, VizArchitec
 
     public void refreshDraggingMarker() {
         //Refresh dragging marker
-		/*DoubleBuffer objPos = BufferUtil.newDoubleBuffer(3);
+        /*DoubleBuffer objPos = BufferUtil.newDoubleBuffer(3);
          glu.gluProject(0, 0, 0, modelMatrix, projMatrix, viewport, objPos);
          double dxx = objPos.get(0);
          double dyy = objPos.get(1);
@@ -377,21 +367,26 @@ public abstract class GLAbstractListener implements GLEventListener, VizArchitec
 
             if (showGLLog) {
                 showGLLog = false;
-                System.err.println("GL_VENDOR: " + gl.glGetString(GL2.GL_VENDOR));
-                System.err.println("GL_RENDERER: " + gl.glGetString(GL2.GL_RENDERER));
-                System.err.println("GL_VERSION: " + gl.glGetString(GL2.GL_VERSION));
-                System.err.println("GL_SURFACE_SCALE: " + globalScale);
+                Logger logger = Logger.getLogger("");
+                logger.log(Level.INFO, "GL_VENDOR: {0}", gl.glGetString(GL2.GL_VENDOR));
+                logger.log(Level.INFO, "GL_RENDERER: {0}", gl.glGetString(GL2.GL_RENDERER));
+                logger.log(Level.INFO, "GL_VERSION: {0}", gl.glGetString(GL2.GL_VERSION));
+                logger.log(Level.INFO, "GL_SURFACE_SCALE: {0}", globalScale);
             }
 
             resizing = false;
+            
         }
     }
 
     @Override
     public void destroy() {
-        if (graphMouseAdapter != null) {
-            window.removeMouseListener(graphMouseAdapter);
+        if (graphMouseAdapterNewt != null) {
+            window.removeMouseListener(graphMouseAdapterNewt);
+        } else if (graphMouseAdapterCanvas != null) {
+            graphComponent.removeMouseListener(graphMouseAdapterCanvas);
         }
+        graphMouseAdapter = null;
         drawable.destroy();
     }
 
@@ -590,5 +585,44 @@ public abstract class GLAbstractListener implements GLEventListener, VizArchitec
     @Override
     public Point getLocationOnScreen() {
         return graphComponent.getLocationOnScreen();
+    }
+
+    private class GraphMouseAdapter {
+
+        final boolean pause = vizController.getVizConfig().isPauseLoopWhenMouseOut();
+        final int minVal = vizController.getVizConfig().getReduceFpsWhenMouseOutValue();
+        final int maxVal = 30;
+        private float lastTarget = 0.1f;
+
+        private void mouseEntered() {
+            if (pause) {
+                engine.resumeDisplay();
+            } else {
+                if (!scheduler.isAnimating()) {
+                    engine.resumeDisplay();
+                }
+                scheduler.setFps(maxVal);
+                resetFpsAverage();
+            }
+        }
+
+        private void mouseExited() {
+            if (pause) {
+                engine.pauseDisplay();
+            } else {
+                float fps = getFpsAverage();
+                float target = (float) (fps / (1. / Math.sqrt(getFpsAverage()) * 10.));
+                if (fps == 0f) {
+                    target = lastTarget;
+                }
+                if (target <= 0.005f) {
+                    engine.pauseDisplay();
+                } else if (target > minVal) {
+                    target = minVal;
+                }
+                lastTarget = target;
+                scheduler.setFps(target);
+            }
+        }
     }
 }

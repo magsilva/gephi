@@ -45,13 +45,11 @@ import java.util.HashMap;
 import java.util.Map;
 import org.gephi.filters.api.FilterLibrary;
 import org.gephi.filters.api.Query;
-import org.gephi.filters.spi.Category;
 import org.gephi.filters.spi.CategoryBuilder;
 import org.gephi.filters.spi.Filter;
 import org.gephi.filters.spi.FilterBuilder;
 import org.gephi.filters.spi.FilterLibraryMask;
-import org.gephi.graph.api.GraphController;
-import org.gephi.graph.api.GraphModel;
+import org.gephi.project.api.Workspace;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
@@ -62,11 +60,13 @@ import org.openide.util.lookup.InstanceContent;
  */
 public class FilterLibraryImpl implements FilterLibrary {
 
-    private AbstractLookup lookup;
-    private InstanceContent content;
-    private Map<Class<? extends Filter>, FilterBuilder> buildersMap;
+    private final Workspace workspace;
+    private final AbstractLookup lookup;
+    private final InstanceContent content;
+    private final Map<Class<? extends Filter>, FilterBuilder> buildersMap;
 
-    public FilterLibraryImpl() {
+    public FilterLibraryImpl(Workspace workspace) {
+        this.workspace = workspace;
         content = new InstanceContent();
         lookup = new AbstractLookup(content);
 
@@ -82,23 +82,23 @@ public class FilterLibraryImpl implements FilterLibrary {
             content.add(catBuilder);
         }
 
-        content.add(new HierarchicalGraphMask());
+        buildersMap = new HashMap<>();
     }
 
     private void buildBuildersMap() {
-        buildersMap = new HashMap<Class<? extends Filter>, FilterBuilder>();
+
         for (FilterBuilder builder : lookup.lookupAll(FilterBuilder.class)) {
             try {
-                Filter f = builder.getFilter();
+                Filter f = builder.getFilter(workspace);
                 buildersMap.put(f.getClass(), builder);
                 builder.destroy(f);
             } catch (Exception e) {
             }
         }
         for (CategoryBuilder catBuilder : Lookup.getDefault().lookupAll(CategoryBuilder.class)) {
-            for (FilterBuilder builder : catBuilder.getBuilders()) {
+            for (FilterBuilder builder : catBuilder.getBuilders(workspace)) {
                 try {
-                    Filter f = builder.getFilter();
+                    Filter f = builder.getFilter(workspace);
                     buildersMap.put(f.getClass(), builder);
                     builder.destroy(f);
                 } catch (Exception e) {
@@ -107,33 +107,33 @@ public class FilterLibraryImpl implements FilterLibrary {
         }
     }
 
+    @Override
     public Lookup getLookup() {
         return lookup;
     }
 
+    @Override
     public void addBuilder(FilterBuilder builder) {
         content.add(builder);
     }
 
+    @Override
     public void removeBuilder(FilterBuilder builder) {
         content.remove(builder);
     }
 
+    @Override
     public void registerMask(FilterLibraryMask mask) {
         content.add(mask);
     }
 
+    @Override
     public void unregisterMask(FilterLibraryMask mask) {
         content.remove(mask);
     }
 
+    @Override
     public FilterBuilder getBuilder(Filter filter) {
-        if (buildersMap == null) {
-            buildBuildersMap();
-        }
-        if (buildersMap.get(filter.getClass()) != null) {
-            return buildersMap.get(filter.getClass());
-        }
         buildBuildersMap();
         if (buildersMap.get(filter.getClass()) != null) {
             return buildersMap.get(filter.getClass());
@@ -141,23 +141,13 @@ public class FilterLibraryImpl implements FilterLibrary {
         return null;
     }
 
+    @Override
     public void saveQuery(Query query) {
         content.add(query);
     }
 
+    @Override
     public void deleteQuery(Query query) {
         content.remove(query);
-    }
-
-    private static class HierarchicalGraphMask implements FilterLibraryMask {
-
-        public Category getCategory() {
-            return FilterLibrary.HIERARCHY;
-        }
-
-        public boolean isValid() {
-            GraphModel graphModel = Lookup.getDefault().lookup(GraphController.class).getModel();
-            return graphModel.isHierarchical();
-        }
     }
 }

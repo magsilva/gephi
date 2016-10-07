@@ -51,9 +51,8 @@ import java.beans.PropertyChangeListener;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 import javax.swing.AbstractCellEditor;
 import javax.swing.Icon;
 import javax.swing.JButton;
@@ -68,9 +67,12 @@ import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import net.java.dev.colorchooser.ColorChooser;
+import org.gephi.appearance.api.Partition;
 import org.gephi.appearance.api.PartitionFunction;
 import org.gephi.appearance.plugin.palette.Palette;
+import org.gephi.appearance.plugin.palette.PaletteGenerator;
 import org.gephi.appearance.plugin.palette.PaletteManager;
+import org.gephi.graph.api.AttributeUtils;
 import org.gephi.ui.appearance.plugin.palette.PaletteGeneratorPanel;
 import org.gephi.ui.components.PaletteIcon;
 import org.gephi.ui.utils.UIUtils;
@@ -86,9 +88,10 @@ import org.openide.util.NbBundle;
  */
 public class PartitionColorTransformerPanel extends javax.swing.JPanel {
 
-    private PalettePopupButton palettePopupButton;
+    private static final int PALETTE_DISPLAY_LIMIT = 15;
+    private final PalettePopupButton palettePopupButton;
     private PartitionFunction function;
-    private List<Object> values;
+    private Collection<Object> values;
 
     public PartitionColorTransformerPanel() {
         initComponents();
@@ -106,19 +109,31 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
         this.function = function;
         NumberFormat formatter = NumberFormat.getPercentInstance();
         formatter.setMaximumFractionDigits(2);
+        Partition partition = function.getPartition();
 
-        values = new ArrayList();
-        for (Object value : function.getPartition().getValues()) {
-            values.add(value);
-        }
-        Collections.sort(values, new Comparator() {
-            @Override
-            public int compare(Object o1, Object o2) {
-                float p1 = PartitionColorTransformerPanel.this.function.getPartition().percentage(o1);
-                float p2 = PartitionColorTransformerPanel.this.function.getPartition().percentage(o2);
-                return p1 > p2 ? -1 : p1 < p2 ? 1 : 0;
+        values = partition.getSortedValues();
+
+        List<Object> nullColors = new ArrayList<>();
+        Color defaultColor = Color.LIGHT_GRAY;
+        for (Object val : values) {
+            Color c = partition.getColor(val);
+            if (c == null) {
+                nullColors.add(val);
+                partition.setColor(val, defaultColor);
             }
-        });
+        }
+
+        int valuesWithColors = values.size() - nullColors.size();
+        if (!nullColors.isEmpty() && valuesWithColors < 8) {
+            Color[] cls = PaletteGenerator.generatePalette(Math.min(8, values.size()), 5, new Random(42l));
+            int i = 0;
+            for (Object val : nullColors) {
+                int index = valuesWithColors + i++;
+                if(index < cls.length) {
+                    partition.setColor(val, cls[index]);
+                }
+            }
+        }
 
         //Model
         String[] columnNames = new String[]{"Color", "Partition", "Percentage"};
@@ -130,11 +145,13 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
         };
         table.setModel(model);
 
+        String countMsg = NbBundle.getMessage(PartitionColorTransformerPanel.class, "PartitionColorTransformerPanel.tooltip.elementsCount");
+
         TableColumn partCol = table.getColumnModel().getColumn(1);
-        partCol.setCellRenderer(new TextRenderer());
+        partCol.setCellRenderer(new TextRenderer(null));
 
         TableColumn percCol = table.getColumnModel().getColumn(2);
-        percCol.setCellRenderer(new TextRenderer());
+        percCol.setCellRenderer(new TextRenderer(countMsg));
         percCol.setPreferredWidth(60);
         percCol.setMaxWidth(60);
 
@@ -144,33 +161,34 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
         colorCol.setPreferredWidth(16);
         colorCol.setMaxWidth(16);
 
-        for (int j = 0; j < values.size(); j++) {
-            Object value = values.get(j);
-            String displayName = value == null ? "null" : value.toString();
-            float percentage = function.getPartition().percentage(value);
+        int j = 0;
+        for (Object value : values) {
+            String displayName = value == null ? "null" : value.getClass().isArray() ? AttributeUtils.printArray(value) : value.toString();
+            int count = function.getPartition().count(value);
+            float percentage = function.getPartition().percentage(value) / 100f;
             model.setValueAt(value, j, 0);
             model.setValueAt(displayName, j, 1);
-            String perc = "(" + formatter.format(percentage) + ")";
-            model.setValueAt(perc, j, 2);
+            String percCount = count + "_(" + formatter.format(percentage) + ")";
+            model.setValueAt(percCount, j, 2);
+            j++;
         }
     }
 
     private void applyPalette(Palette palette) {
         PaletteManager.getInstance().addRecentPalette(palette);
         Color[] colors = palette.getColors();
-        for (int i = 0; i < values.size(); i++) {
-            Object val = values.get(i);
-            Color col = colors[i];
-            function.getPartition().setColor(val, col);
+        int i = 0;
+        for (Object value : values) {
+            Color col = colors[i++];
+            function.getPartition().setColor(value, col);
         }
         table.revalidate();
         table.repaint();
     }
 
     private void applyColor(Color col) {
-        for (int i = 0; i < values.size(); i++) {
-            Object val = values.get(i);
-            function.getPartition().setColor(val, col);
+        for (Object value : values) {
+            function.getPartition().setColor(value, col);
         }
         table.revalidate();
         table.repaint();
@@ -184,29 +202,40 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            Color c = function.getPartition().getColor(value);
-            setBackground(c);
+            Color color = function.getPartition().getColor(value);
+            if (color == null) {
+                color = Color.BLACK;
+            }
+            setBackground(color);
             return this;
         }
     }
 
     class TextRenderer extends JLabel implements TableCellRenderer {
 
-        private EmptyIcon emptyIcon;
+        private final EmptyIcon emptyIcon;
+        private final String elementsMessage;
 
-        public TextRenderer() {
+        public TextRenderer(String countMessage) {
             setFont(table.getFont());
             emptyIcon = new EmptyIcon();
+            elementsMessage = countMessage;
         }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            setText((String) value);
+            String valTxt = (String) value;
             if (column == 1) {
+                setText(valTxt);
+                setToolTipText(valTxt);
                 setIcon(emptyIcon);
-            } else {
+            } else if (column == 2) {
+                String[] spl = valTxt.split("_");
+                setText(spl[1]);
+                setToolTipText(spl[0] + " " + elementsMessage);
                 setIcon(null);
             }
+
             return this;
         }
     }
@@ -239,7 +268,12 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
                 @Override
                 public void propertyChange(PropertyChangeEvent evt) {
                     if (evt.getPropertyName().equals(ColorChooser.PROP_COLOR)) {
-                        function.getPartition().setColor(currentValue, (Color) evt.getNewValue());
+                        Color color = (Color) evt.getNewValue();
+                        Partition partition = function.getPartition();
+                        if (partition.getColor(currentValue) == null || !partition.getColor(currentValue).equals(color)) {
+                            function.getPartition().setColor(currentValue, (Color) evt.getNewValue());
+                        }
+                        PartitionColorTransformerPanel.this.requestFocusInWindow();
                     }
                 }
             });
@@ -287,31 +321,27 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
                 menu.add("<html><i>" + NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.norecent") + "</i></html>");
             } else {
                 for (Palette pl : recentPalettes) {
-                    menu.add(new PaletteMenuItem(pl, colorsCount));
+                    if (pl.size() >= colorsCount) {
+                        menu.add(new PaletteMenuItem(pl, Math.min(PALETTE_DISPLAY_LIMIT, colorsCount)));
+                    }
                 }
             }
 
             menu.add(new JXTitledSeparator(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.standard")));
-            JMenu lightPalette = new JMenu(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.light"));
-            for (Palette pl : paletteManager.getWhiteBackgroudPalette(colorsCount)) {
-                lightPalette.add(new PaletteMenuItem(pl, colorsCount));
+            JMenu lightPalette = new JMenu(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.palette"));
+            for (Palette pl : paletteManager.getDefaultPalette(colorsCount)) {
+                lightPalette.add(new PaletteMenuItem(pl, Math.min(PALETTE_DISPLAY_LIMIT, colorsCount)));
             }
             menu.add(lightPalette);
 
-            JMenu darkPalette = new JMenu(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.dark"));
-            for (Palette pl : paletteManager.getBlackBackgroudPalette(colorsCount)) {
-                darkPalette.add(new PaletteMenuItem(pl, colorsCount));
-            }
-            menu.add(darkPalette);
-
-            JMenuItem allBlack = new JMenuItem(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.allblack"));
-            allBlack.addActionListener(new ActionListener() {
+            JMenuItem allGrey = new JMenuItem(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.allgrey"));
+            allGrey.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
-                    applyColor(Color.BLACK);
+                    applyColor(Color.LIGHT_GRAY);
                 }
             });
-            menu.add(allBlack);
+            menu.add(allGrey);
 
             JMenuItem allWhite = new JMenuItem(NbBundle.getMessage(PartitionColorTransformerPanel.class, "PalettePopup.allwhite"));
             allWhite.addActionListener(new ActionListener() {
@@ -382,7 +412,6 @@ public class PartitionColorTransformerPanel extends javax.swing.JPanel {
 
         centerScrollPane.setBorder(null);
         centerScrollPane.setOpaque(false);
-        centerScrollPane.setViewportView(null);
 
         backPanel.setLayout(new java.awt.GridBagLayout());
 

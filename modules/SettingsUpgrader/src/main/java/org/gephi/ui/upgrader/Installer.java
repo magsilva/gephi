@@ -48,7 +48,7 @@ public class Installer extends ModuleInstall {
 
     @Override
     public void restored() {
-        if (System.getProperty("org.gephi.settingsUpgrder.enabled", "true").equals("true")) {
+        if (System.getProperty("org.gephi.settingsUpgrader.enabled", "true").equals("true")) {
             importSettings();
         }
     }

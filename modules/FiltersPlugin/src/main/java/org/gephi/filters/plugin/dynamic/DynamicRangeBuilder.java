@@ -45,26 +45,24 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.Icon;
 import javax.swing.JPanel;
-import org.gephi.data.attributes.api.AttributeColumn;
-import org.gephi.data.attributes.api.AttributeController;
-import org.gephi.data.attributes.api.AttributeModel;
-import org.gephi.data.attributes.type.TimeInterval;
-import org.gephi.dynamic.api.DynamicController;
-import org.gephi.dynamic.api.DynamicModel;
-import org.gephi.dynamic.api.DynamicModelEvent;
-import org.gephi.dynamic.api.DynamicModelListener;
 import org.gephi.filters.api.Range;
 import org.gephi.filters.spi.Category;
 import org.gephi.filters.spi.CategoryBuilder;
-import org.gephi.filters.spi.EdgeFilter;
+import org.gephi.filters.spi.ComplexFilter;
 import org.gephi.filters.spi.Filter;
 import org.gephi.filters.spi.FilterBuilder;
 import org.gephi.filters.spi.FilterProperty;
-import org.gephi.filters.spi.NodeFilter;
 import org.gephi.graph.api.Edge;
+import org.gephi.graph.api.Element;
 import org.gephi.graph.api.Graph;
+import org.gephi.graph.api.GraphController;
+import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Interval;
 import org.gephi.graph.api.Node;
-import org.gephi.timeline.api.TimelineController;
+import org.gephi.graph.api.TimeRepresentation;
+import org.gephi.graph.api.types.IntervalSet;
+import org.gephi.graph.api.types.TimestampSet;
+import org.gephi.project.api.Workspace;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.lookup.ServiceProvider;
@@ -81,53 +79,55 @@ public class DynamicRangeBuilder implements CategoryBuilder {
             null,
             null);
 
+    @Override
     public Category getCategory() {
         return DYNAMIC;
     }
 
-    public FilterBuilder[] getBuilders() {
-        List<FilterBuilder> builders = new ArrayList<FilterBuilder>();
-        AttributeModel am = Lookup.getDefault().lookup(AttributeController.class).getModel();
-        AttributeColumn nodeColumn = am.getNodeTable().getColumn(DynamicModel.TIMEINTERVAL_COLUMN);
-        AttributeColumn edgeColumn = am.getEdgeTable().getColumn(DynamicModel.TIMEINTERVAL_COLUMN);
-        if (nodeColumn != null || edgeColumn != null) {
-            builders.add(new DynamicRangeFilterBuilder(nodeColumn, edgeColumn));
+    @Override
+    public FilterBuilder[] getBuilders(Workspace workspace) {
+        List<FilterBuilder> builders = new ArrayList<>();
+        GraphModel am = Lookup.getDefault().lookup(GraphController.class).getGraphModel(workspace);
+        if (am.isDynamic()) {
+            builders.add(new DynamicRangeFilterBuilder(am));
         }
         return builders.toArray(new FilterBuilder[0]);
     }
 
     private static class DynamicRangeFilterBuilder implements FilterBuilder {
 
-        private final AttributeColumn nodeColumn;
-        private final AttributeColumn edgeColumn;
+        private final GraphModel graphModel;
 
-        public DynamicRangeFilterBuilder(AttributeColumn nodeColumn, AttributeColumn edgeColumn) {
-            this.nodeColumn = nodeColumn;
-            this.edgeColumn = edgeColumn;
+        public DynamicRangeFilterBuilder(GraphModel graphModel) {
+            this.graphModel = graphModel;
         }
 
+        @Override
         public Category getCategory() {
             return DYNAMIC;
         }
 
+        @Override
         public String getName() {
             return "Time Interval";
         }
 
+        @Override
         public Icon getIcon() {
             return null;
         }
 
+        @Override
         public String getDescription() {
             return null;
         }
 
-        public DynamicRangeFilter getFilter() {
-            TimelineController timelineController = Lookup.getDefault().lookup(TimelineController.class);
-            DynamicController dynamicController = Lookup.getDefault().lookup(DynamicController.class);
-            return new DynamicRangeFilter(timelineController, dynamicController, nodeColumn, edgeColumn);
+        @Override
+        public DynamicRangeFilter getFilter(Workspace workspace) {
+            return new DynamicRangeFilter(graphModel);
         }
 
+        @Override
         public JPanel getPanel(Filter filter) {
             final DynamicRangeFilter dynamicRangeFilter = (DynamicRangeFilter) filter;
             DynamicRangeUI ui = Lookup.getDefault().lookup(DynamicRangeUI.class);
@@ -137,68 +137,81 @@ public class DynamicRangeBuilder implements CategoryBuilder {
             return null;
         }
 
+        @Override
         public void destroy(Filter filter) {
-            ((DynamicRangeFilter) filter).destroy();
         }
     }
 
-    public static class DynamicRangeFilter implements NodeFilter, EdgeFilter, DynamicModelListener {
+    public static class DynamicRangeFilter implements ComplexFilter {
 
-        private AttributeColumn nodeColumn;
-        private AttributeColumn edgeColumn;
-        private DynamicController dynamicController;
-        private DynamicModel dynamicModel;
-        private TimelineController timelineController;
-        private TimeInterval visibleInterval;
+        private final TimeRepresentation timeRepresentation;
         private FilterProperty[] filterProperties;
-        private Range range;
+        private Interval visibleInterval;
+        private Range range = new Range(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
         private boolean keepNull = true;
 
-        public DynamicRangeFilter(TimelineController timelineController, DynamicController dynamicController, AttributeColumn nodeColumn, AttributeColumn edgeColumn) {
-            this.nodeColumn = nodeColumn;
-            this.edgeColumn = edgeColumn;
-            this.dynamicController = dynamicController;
-            this.dynamicModel = dynamicController.getModel();
-            this.timelineController = timelineController;
+        public DynamicRangeFilter(GraphModel graphModel) {
+            this.timeRepresentation = graphModel.getConfiguration().getTimeRepresentation();
         }
 
-        public boolean init(Graph graph) {
-            dynamicController.addModelListener(this);
-            visibleInterval = dynamicModel.getVisibleInterval();
-            return true;
-        }
+        @Override
+        public Graph filter(Graph graph) {
+            visibleInterval = new Interval(range.getLowerDouble(), range.getUpperDouble());
 
-        public boolean evaluate(Graph graph, Node node) {
-            if (nodeColumn != null) {
-                Object obj = node.getNodeData().getAttributes().getValue(nodeColumn.getIndex());
-                if (obj != null) {
-                    TimeInterval timeInterval = (TimeInterval) obj;
-                    return timeInterval.isInRange(visibleInterval.getLow(), visibleInterval.getHigh());
+            List<Node> toRemoveNodes = new ArrayList<>();
+            for (Node n : graph.getNodes()) {
+                if (!evaluateElement(n)) {
+                    toRemoveNodes.add(n);
                 }
-                return keepNull;
             }
-            return true;
-        }
+            graph.removeAllNodes(toRemoveNodes);
 
-        public boolean evaluate(Graph graph, Edge edge) {
-            if (edgeColumn != null) {
-                Object obj = edge.getEdgeData().getAttributes().getValue(edgeColumn.getIndex());
-                if (obj != null) {
-                    TimeInterval timeInterval = (TimeInterval) obj;
-                    return timeInterval.isInRange(visibleInterval.getLow(), visibleInterval.getHigh());
+            List<Edge> toRemoveEdge = new ArrayList<>();
+            for (Edge e : graph.getEdges()) {
+                if (!evaluateElement(e)) {
+                    toRemoveEdge.add(e);
                 }
-                return keepNull;
             }
-            return true;
+            graph.removeAllEdges(toRemoveEdge);
+
+            graph.getModel().setTimeInterval(graph.getView(), visibleInterval);
+
+            return graph;
         }
 
-        public void finish() {
+        private boolean evaluateElement(Element element) {
+            if (timeRepresentation.equals(TimeRepresentation.INTERVAL)) {
+                IntervalSet timeSet = (IntervalSet) element.getAttribute("timeset");
+                if (timeSet != null) {
+                    for (Interval i : timeSet.toArray()) {
+                        if (visibleInterval.compareTo(i) == 0) {
+                            return true;
+                        }
+                    }
+                } else if (keepNull) {
+                    return true;
+                }
+            } else {
+                TimestampSet timeSet = (TimestampSet) element.getAttribute("timeset");
+                if (timeSet != null) {
+                    for (double t : timeSet.toPrimitiveArray()) {
+                        if (visibleInterval.compareTo(t) == 0) {
+                            return true;
+                        }
+                    }
+                } else if (keepNull) {
+                    return true;
+                }
+            }
+            return false;
         }
 
+        @Override
         public String getName() {
             return NbBundle.getMessage(DynamicRangeBuilder.class, "DynamicRangeBuilder.name");
         }
 
+        @Override
         public FilterProperty[] getProperties() {
             if (filterProperties == null) {
                 filterProperties = new FilterProperty[0];
@@ -211,15 +224,6 @@ public class DynamicRangeBuilder implements CategoryBuilder {
                 }
             }
             return filterProperties;
-        }
-
-        public void dynamicModelChanged(DynamicModelEvent event) {
-            switch (event.getEventType()) {
-                case VISIBLE_INTERVAL:
-                    TimeInterval interval = (TimeInterval) event.getData();
-                    getProperties()[0].setValue(new Range(interval.getLow(), interval.getHigh()));
-                    break;
-            }
         }
 
         public FilterProperty getRangeProperty() {
@@ -235,18 +239,14 @@ public class DynamicRangeBuilder implements CategoryBuilder {
         }
 
         public Range getRange() {
-            if (visibleInterval != null) {
-                return new Range(visibleInterval.getLow(), visibleInterval.getHigh());
-            }
-            return null;
+            return range;
         }
 
         public void setRange(Range range) {
-            dynamicController.setVisibleInterval(range.getLowerDouble(), range.getUpperDouble());
+            this.range = range;
         }
 
         public void destroy() {
-            dynamicController.removeModelListener(this);
         }
     }
 }

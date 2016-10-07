@@ -75,7 +75,7 @@ import org.openide.util.NbBundle;
  */
 public class RendererManager extends javax.swing.JPanel implements PropertyChangeListener {
 
-    private ArrayList<RendererCheckBox> renderersList = new ArrayList<RendererCheckBox>();
+    private ArrayList<RendererCheckBox> renderersList = new ArrayList<>();
     private PreviewController previewController;
 
     /**
@@ -137,7 +137,7 @@ public class RendererManager extends javax.swing.JPanel implements PropertyChang
         PreviewModel model = previewController.getModel();
         Set<Renderer> enabledRenderers = null;
         if (model != null && model.getManagedRenderers() != null) {
-            enabledRenderers = new HashSet<Renderer>();
+            enabledRenderers = new HashSet<>();
             enabledRenderers.addAll(Arrays.asList(model.getManagedEnabledRenderers()));
         }
         renderersList.clear();
@@ -188,7 +188,7 @@ public class RendererManager extends javax.swing.JPanel implements PropertyChang
     private void updateModelManagedRenderers() {
         PreviewModel model = previewController.getModel();
         if (model != null) {
-            ArrayList<ManagedRenderer> managedRenderers = new ArrayList<ManagedRenderer>();
+            ArrayList<ManagedRenderer> managedRenderers = new ArrayList<>();
             for (RendererCheckBox rendererCheckBox : renderersList) {
                 managedRenderers.add(new ManagedRenderer(rendererCheckBox.renderer, rendererCheckBox.isSelected()));
             }
@@ -297,6 +297,7 @@ public class RendererManager extends javax.swing.JPanel implements PropertyChang
         restoreOrderButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
         restoreOrderButton.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
         restoreOrderButton.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 restoreOrderButtonActionPerformed(evt);
             }
@@ -309,6 +310,7 @@ public class RendererManager extends javax.swing.JPanel implements PropertyChang
         selectAllButton.setFocusable(false);
         selectAllButton.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
         selectAllButton.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 selectAllButtonActionPerformed(evt);
             }
@@ -320,6 +322,7 @@ public class RendererManager extends javax.swing.JPanel implements PropertyChang
         unselectAllButon.setFocusable(false);
         unselectAllButon.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
         unselectAllButon.addActionListener(new java.awt.event.ActionListener() {
+            @Override
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 unselectAllButonActionPerformed(evt);
             }

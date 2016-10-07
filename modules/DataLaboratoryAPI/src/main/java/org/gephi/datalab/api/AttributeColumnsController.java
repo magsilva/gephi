@@ -51,8 +51,10 @@ import org.gephi.datalab.spi.rows.merge.AttributeRowsMergeStrategy;
 import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Element;
+import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.Node;
 import org.gephi.graph.api.Table;
+import org.gephi.graph.api.TimeRepresentation;
 
 /**
  * <p>This interface defines part of the Data Laboratory API basic actions.</p>
@@ -123,22 +125,24 @@ public interface AttributeColumnsController {
     /**
      * <p>Converts and replaces a table column with a dynamic column preserving original column values.</p>
      * <p>This should be used only in columns where the <code>canConvertColumnToDynamic</code> returns true</p>
-     * <p>The new values have a default interval that uses the low, high, lopen and ropen parameters.</p>
+     * <p>For graphs with {@code INTERVAL} {@link TimeRepresentation}, the new values have a default interval that uses the {@code low} and {@code high} parameters.</p>
+     * <p>For graphs with {@code TIMESTAMP} {@link TimeRepresentation}, the new values have a default timestamp that uses the {@code low} parameter, {@code high} parameter is ignored.</p>
      * @param table Table of the column
      * @param column Column to convert and replace
-     * @param low Low bound for default interval
-     * @param high High bound for default interval
+     * @param low Low bound for default interval or default timestamp
+     * @param high High bound for default interval or ignored for timestamps
      * @return The new column
      */
     Column convertAttributeColumnToDynamic(Table table, Column column, double low, double high);
     
     /**
      * <p>Converts a table column into a new dynamic column preserving original column values. The original column is kept intact</p>
-     * <p>The new values have a default interval that uses the low, high, lopen and ropen parameters.</p>
+     * <p>For graphs with {@code INTERVAL} {@link TimeRepresentation}, the new values have a default interval that uses the {@code low} and {@code high} parameters.</p>
+     * <p>For graphs with {@code TIMESTAMP} {@link TimeRepresentation}, the new values have a default timestamp that uses the {@code low} parameter, {@code high} parameter is ignored.</p>
      * @param table Table of the column
      * @param column Column to convert to dynamic
-     * @param low Low bound for default interval
-     * @param high High bound for default interval
+     * @param low Low bound for default interval or default timestamp
+     * @param high High bound for default interval or ignored for timestamps
      * @param newColumnTitle Title for the new dynamic column
      * @return The new column
      */
@@ -415,6 +419,7 @@ public interface AttributeColumnsController {
      * <p>No special column must be provided.</p>
      * <p>If a column name is not already in nodes table, it will be created with the corresponding columnType index.</p>
      * <p>If a node id already exists, depending on assignNewNodeIds, a new id will be assigned to it or instead, the already existing node attributes will be updated with the CSV data</p>
+     * @param graph Graph to import nodes
      * @param file CSV file
      * @param separator Separator of values of the CSV file
      * @param charset Charset of the CSV file
@@ -422,7 +427,7 @@ public interface AttributeColumnsController {
      * @param columnTypes Types of the columns in the CSV file to use when creating columns
      * @param assignNewNodeIds Indicates if nodes should be assigned new ids when the ids are already in nodes table or not provided.
      */
-    void importCSVToNodesTable(File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean assignNewNodeIds);
+    void importCSVToNodesTable(Graph graph, File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean assignNewNodeIds);
 
     /**
      * <p>Method for importing csv data to edges table.</p>
@@ -438,6 +443,7 @@ public interface AttributeColumnsController {
      * <li>First column named 'Type' (case insensitive) will be used as edge type, matching 'Directed' or 'Undirected' strings (case insensitive). The next ones will be used as normal columns, and created if not already existing.</li>
      * </ul>
      * </p>
+     * @param graph Graph to import edges
      * @param file CSV file
      * @param separator Separator of values of the CSV file
      * @param charset Charset of the CSV file
@@ -445,7 +451,7 @@ public interface AttributeColumnsController {
      * @param columnTypes Types of the columns in the CSV file to use when creating columns
      * @param createNewNodes Indicates if missing nodes should be created when an edge declares a source or target id not already existing
      */
-    void importCSVToEdgesTable(File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean createNewNodes);
+    void importCSVToEdgesTable(Graph graph, File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean createNewNodes);
     
     /**
      * <p>Merges the given rows values to the given result row using one merge strategy for each column of the table.</p>

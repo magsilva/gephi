@@ -58,11 +58,7 @@ import javax.swing.UIManager;
 import org.gephi.branding.desktop.reporter.ReporterHandler;
 import org.gephi.desktop.project.api.ProjectControllerUI;
 import org.gephi.project.api.ProjectController;
-import org.openide.LifecycleManager;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.modules.ModuleInstall;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -78,17 +74,10 @@ import org.openide.windows.WindowManager;
  */
 public class Installer extends ModuleInstall {
 
-    private static final String LATEST_GEPHI_VERSION_URL = "https://gephi.org/updates/latest";
+    private static final String LATEST_GEPHI_VERSION_URL = "https://raw.githubusercontent.com/gephi/gephi/gh-pages/latest";
 
     @Override
     public void restored() {
-        try {
-            //Fix old preview loading - bug 873148
-            doDisable("org.gephi.preview");
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
         //Init
         initGephi();
 
@@ -108,6 +97,7 @@ public class Installer extends ModuleInstall {
 
         //Check for new major release:
         WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
+            @Override
             public void run() {
                 new Thread() {
                     @Override
@@ -125,6 +115,7 @@ public class Installer extends ModuleInstall {
     private void initGephi() {
         final ProjectController pc = Lookup.getDefault().lookup(ProjectController.class);
         WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
+            @Override
             public void run() {
                 pc.startup();
                 DragNDropFrameAdapter.register();
@@ -149,54 +140,28 @@ public class Installer extends ModuleInstall {
         return true;
     }
 
-    public void doDisable(String codeName) throws Exception {
-        FileObject confFileObject = FileUtil.getConfigFile("Modules/" + codeName.replace('.', '-') + ".xml");
-
-        if (confFileObject != null && confFileObject.isValid()) {
-            StringBuilder outputBuilder = new StringBuilder();
-
-            String matchOptionsLine = "<param name=\"enabled\">true";
-
-            //In
-            File confFile = FileUtil.toFile(confFileObject);
-            BufferedReader reader = new BufferedReader(new FileReader(confFile));
-            String strLine;
-            boolean matched = false;
-            while ((strLine = reader.readLine()) != null) {
-                if (strLine.indexOf(matchOptionsLine) != -1) {
-                    matched = true;
-                    strLine = strLine.replaceAll("<param name=\"enabled\">true</param>", "<param name=\"enabled\">false</param>");
-                }
-                outputBuilder.append(strLine);
-                outputBuilder.append("\n");
-            }
-            reader.close();
-
-            //Out
-            FileWriter writer = new FileWriter(confFile);
-            writer.write(outputBuilder.toString());
-            writer.close();
-
-            if (matched) {
-                JOptionPane.showMessageDialog(null, "A custom patch to import your 0.8 alpha settings has been applied and Gephi needs to restart now. Sorry for the inconvenience.");
-
-                //Restart
-                LifecycleManager.getDefault().markForRestart();
-                LifecycleManager.getDefault().exit();
-            }
-        }
-    }
-
     private void checkForNewMajorRelease() {
         boolean doCheck = NbPreferences.forModule(Installer.class).getBoolean("check_latest_version", true);
         if (doCheck) {
+            InputStream stream = null;
+            BufferedReader reader = null;
             try {
                 String gephiVersion = System.getProperty("netbeans.productversion");
+                if (gephiVersion.contains("SNAPSHOT")) {
+                    return;
+                }
+
                 URL url = new URL(LATEST_GEPHI_VERSION_URL);
-                URLConnection conn = url.openConnection();
-                String latest = new BufferedReader(new InputStreamReader(conn.getInputStream())).readLine();
+                URLConnection connection = url.openConnection();
+                connection.setRequestProperty("User-Agent", "");
+                connection.connect();
+                stream = connection.getInputStream();
+                reader = new BufferedReader(new InputStreamReader(stream));
+
+                String latest = reader.readLine();
                 latest = latest.replaceAll("[a-zA-Z .-]", "");
-                if (!gephiVersion.contains("SNAPSHOT") && !latest.equals(gephiVersion.replaceAll("[0-9]{12}", "").replaceAll("[a-zA-Z .-]", ""))) {
+                String gephiVersionTst = gephiVersion.replaceAll("[0-9]{12}", "").replaceAll("[a-zA-Z .-]", "");
+                if (Integer.parseInt(latest) > Integer.parseInt(gephiVersionTst)) {
                     //Show update dialog
                     JCheckBox checkbox = new JCheckBox(NbBundle.getMessage(Installer.class, "MajorReleaseCheck.dontShowAgain"), false);
                     String message = NbBundle.getMessage(Installer.class, "MajorReleaseCheck.message", latest, gephiVersion);
@@ -207,7 +172,18 @@ public class Installer extends ModuleInstall {
                     }
                 }
             } catch (Exception ex) {
-                System.out.println("Error while checking latest Gephi version");
+                Logger.getLogger("").warning("Error while checking latest Gephi version");
+            } finally {
+                try {
+                    if (reader != null) {
+                        reader.close();
+                    }
+                    if (stream != null) {
+                        stream.close();
+                    }
+                } catch (IOException e) {
+
+                }
             }
         }
     }

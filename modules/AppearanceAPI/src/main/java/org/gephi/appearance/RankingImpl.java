@@ -43,70 +43,37 @@ package org.gephi.appearance;
 
 import org.gephi.appearance.api.Interpolator;
 import org.gephi.appearance.api.Ranking;
-import org.gephi.graph.api.Column;
-import org.gephi.graph.api.Index;
 
 /**
  *
  * @author mbastian
  */
-public class RankingImpl implements Ranking {
+public abstract class RankingImpl implements Ranking {
 
-    private final Index index;
-    private final Column column;
-    private Interpolator interpolator;
+    protected Number min;
+    protected Number max;
 
-    public RankingImpl(Column column, Index index, Interpolator interpolator) {
-        this.column = column;
-        this.index = index;
-        this.interpolator = interpolator;
+    protected RankingImpl() {
     }
+
+    protected abstract void refresh();
 
     @Override
     public Number getMinValue() {
-        return index.getMinValue(column);
+        return min;
     }
 
     @Override
     public Number getMaxValue() {
-        return index.getMaxValue(column);
+        return max;
     }
 
     @Override
-    public Interpolator getInterpolator() {
-        return interpolator;
-    }
-
-    @Override
-    public void setInterpolator(Interpolator interpolator) {
-        this.interpolator = interpolator;
-    }
-
-    @Override
-    public float normalize(Number value) {
-        float normalizedValue = (float) (value.doubleValue() - getMinValue().doubleValue()) / (float) (getMaxValue().doubleValue() - getMinValue().doubleValue());
+    public float normalize(Number value, Interpolator interpolator) {
+        if (min.equals(max)) {
+            return 1f;
+        }
+        float normalizedValue = (float) (value.doubleValue() - min.doubleValue()) / (float) (max.doubleValue() - min.doubleValue());
         return interpolator.interpolate(normalizedValue);
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 3;
-        hash = 67 * hash + (this.column != null ? this.column.hashCode() : 0);
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final RankingImpl other = (RankingImpl) obj;
-        if (this.column != other.column && (this.column == null || !this.column.equals(other.column))) {
-            return false;
-        }
-        return true;
     }
 }

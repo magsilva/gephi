@@ -47,7 +47,9 @@ import org.gephi.appearance.spi.Transformer;
 import org.gephi.appearance.spi.TransformerUI;
 import org.gephi.graph.api.Element;
 import org.gephi.graph.api.ElementIterable;
+import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Node;
 import org.gephi.project.api.ProjectController;
 import org.gephi.project.api.Workspace;
 import org.gephi.project.api.WorkspaceListener;
@@ -110,14 +112,24 @@ public class AppearanceControllerImpl implements AppearanceController {
     public void transform(Function function) {
         if (model != null) {
             GraphModel graphModel = model.getGraphModel();
+            Graph graph = graphModel.getGraphVisible();
             ElementIterable<? extends Element> iterable;
-            if (function.getTransformer().isNode()) {
-                iterable = graphModel.getGraphVisible().getNodes();
+            if (function.getElementClass().equals(Node.class)) {
+                iterable = graph.getNodes();
             } else {
-                iterable = graphModel.getGraphVisible().getEdges();
+                iterable = graph.getEdges();
             }
-            for (Element element : iterable) {
-                function.transform(element);
+            try {
+                for (Element element : iterable) {
+                    function.transform(element, graph);
+                }
+            } catch (Exception e) {
+                iterable.doBreak();
+                if (e instanceof RuntimeException) {
+                    throw (RuntimeException) e;
+                } else {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }
@@ -151,6 +163,20 @@ public class AppearanceControllerImpl implements AppearanceController {
     public void setUseLocalScale(boolean useLocalScale) {
         if (model != null) {
             model.setLocalScale(useLocalScale);
+        }
+    }
+
+    @Override
+    public void forcePartitionFunction(Function function) {
+        if (model != null) {
+            model.forcePartition(function);
+        }
+    }
+
+    @Override
+    public void forceRankingFunction(Function function) {
+        if (model != null) {
+            model.forceRanking(function);
         }
     }
 }

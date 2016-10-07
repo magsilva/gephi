@@ -83,8 +83,8 @@ public class Report {
     private String glRenderer = "";
     private String glVersion = "";
     //Modules
-    private List<String> enabledModules = new ArrayList<String>();
-    private List<String> disabledModules = new ArrayList<String>();
+    private List<String> enabledModules = new ArrayList<>();
+    private List<String> disabledModules = new ArrayList<>();
 
     public Report() {
         Calendar cal = Calendar.getInstance();
@@ -229,7 +229,7 @@ public class Report {
 
     public Element writeXml(Document document) {
         Element reportE = document.createElement("report");
-        reportE.setAttribute("version", "0.7");
+        reportE.setAttribute("version", "0.9.1");
 
         //Date
         Element dateE = document.createElement("date");

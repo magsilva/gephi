@@ -38,27 +38,26 @@ made subject to such option by the copyright holder.
 Contributor(s):
 
 Portions Copyrighted 2011 Gephi Consortium.
-*/
+ */
 package org.gephi.filters;
 
 import java.beans.PropertyEditorSupport;
-import org.gephi.data.attributes.api.AttributeColumn;
-import org.gephi.data.attributes.api.AttributeController;
-import org.gephi.data.attributes.api.AttributeModel;
-import org.gephi.data.attributes.api.AttributeType;
-import org.openide.util.Lookup;
+import org.gephi.graph.api.AttributeUtils;
+import org.gephi.graph.api.Column;
+import org.gephi.graph.api.GraphModel;
 
 /**
  *
  * @author Mathieu Bastian
  */
 public class AttributeColumnPropertyEditor extends PropertyEditorSupport {
-    
-    private AttributeColumn column;
+
+    private Column column;
+    private GraphModel model;
 
     @Override
     public void setValue(Object value) {
-        this.column = (AttributeColumn) value;
+        this.column = (Column) value;
     }
 
     @Override
@@ -69,26 +68,28 @@ public class AttributeColumnPropertyEditor extends PropertyEditorSupport {
     @Override
     public String getAsText() {
         if (column != null) {
-            AttributeModel model = Lookup.getDefault().lookup(AttributeController.class).getModel();
-            if (model.getNodeTable().hasColumn(column.getTitle())) {
-                return "NODE*-*" + column.getId() + "*-*" + column.getType().getTypeString();
-            } else if (model.getEdgeTable().hasColumn(column.getTitle())) {
-                return "EDGE*-*" + column.getId() + "*-*" + column.getType().getTypeString();
+            if (AttributeUtils.isNodeColumn(column)) {
+                return "NODE*-*" + column.getId() + "*-*" + column.getTypeClass().getName();
+            } else {
+                return "EDGE*-*" + column.getId() + "*-*" + column.getTypeClass().getName();
             }
         }
         return "null";
 
     }
 
+    public void setGraphModel(GraphModel model) {
+        this.model = model;
+    }
+
     @Override
     public void setAsText(String text) throws IllegalArgumentException {
         if (!text.equals("null")) {
-            AttributeModel model = Lookup.getDefault().lookup(AttributeController.class).getModel();
             String[] arr = text.split("\\*-\\*");
             if (arr[0].equals("NODE")) {
-                column = model.getNodeTable().getColumn(arr[1], AttributeType.valueOf(arr[2]));
+                column = model.getNodeTable().getColumn(arr[1]);
             } else if (arr[0].equals("EDGE")) {
-                column = model.getEdgeTable().getColumn(arr[1], AttributeType.valueOf(arr[2]));
+                column = model.getEdgeTable().getColumn(arr[1]);
             }
         }
     }

@@ -124,7 +124,7 @@ public class ImporterGML implements FileImporter, LongTask
 
     private ArrayList<Object> parseList(LineNumberReader reader) throws IOException {
 
-        ArrayList<Object> list = new ArrayList<Object>();
+        ArrayList<Object> list = new ArrayList<>();
         char t;
         boolean readingString = false;
         StringBuilder stringBuffer = new StringBuilder();
@@ -323,6 +323,12 @@ public class ImporterGML implements FileImporter, LongTask
                     edge.setType(type);
                 } else {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_directedparse", edge.toString()), Issue.Level.WARNING));
+                }
+            } else if ("fill".equalsIgnoreCase(key)) {
+                if (value instanceof String) {
+                    edge.setColor((String) value);
+                } else if (value instanceof Number) {
+                    edge.setColor(new Color(((Number) value).intValue()));
                 }
             } else {
                 edge.setValue(key, value);

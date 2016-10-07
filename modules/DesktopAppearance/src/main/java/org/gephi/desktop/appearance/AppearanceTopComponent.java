@@ -58,10 +58,12 @@ import javax.swing.JPanel;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import org.gephi.appearance.api.AttributeFunction;
 import org.gephi.appearance.api.Function;
 import org.gephi.appearance.api.Interpolator;
 import org.gephi.appearance.api.RankingFunction;
 import org.gephi.appearance.spi.TransformerUI;
+import org.gephi.graph.api.Column;
 import org.gephi.ui.components.splineeditor.SplineEditor;
 import org.gephi.ui.utils.UIUtils;
 import org.netbeans.api.settings.ConvertAsProperties;
@@ -110,6 +112,9 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
             centerPanel.setBackground(UIManager.getColor("NbExplorerView.background"));
         }
 
+        //Hide for now
+        localScaleButton.setVisible(false);
+
         refreshModel(model);
     }
 
@@ -127,9 +132,9 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
             refreshCenterPanel();
             refreshCombo();
             refreshControls();
-        } else if(pce.getPropertyName().equals(AppearanceUIModelEvent.SET_AUTO_APPLY)) {
+        } else if (pce.getPropertyName().equals(AppearanceUIModelEvent.SET_AUTO_APPLY)) {
             refreshControls();
-        } else if(pce.getPropertyName().equals(AppearanceUIModelEvent.START_STOP_AUTO_APPLY)) {
+        } else if (pce.getPropertyName().equals(AppearanceUIModelEvent.START_STOP_AUTO_APPLY)) {
             refreshControls();
         }
         //        if (pce.getPropertyName().equals(RankingUIModel.LIST_VISIBLE)) {
@@ -242,7 +247,7 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
                         comboBoxModel.addElement(NO_SELECTION);
                         comboBoxModel.setSelectedItem(NO_SELECTION);
 
-                        List<Function> rows = new ArrayList<Function>();
+                        List<Function> rows = new ArrayList<>();
                         rows.addAll(model.getFunctions());
 
                         Collections.sort(rows, new Comparator<Function>() {
@@ -263,7 +268,10 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
                                 if (model != null) {
                                     if (!attibuteBox.getSelectedItem().equals(NO_SELECTION)) {
                                         Function selectedItem = (Function) attibuteBox.getSelectedItem();
-                                        controller.setSelectedFunction(selectedItem);
+                                        Function selectedFunction = model.getSelectedFunction();
+                                        if (selectedFunction != selectedItem) {
+                                            controller.setSelectedFunction(selectedItem);
+                                        }
                                     } else {
                                         controller.setSelectedFunction(null);
                                     }
@@ -306,7 +314,26 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
                             applyButton.setEnabled(true);
                         }
 
+                        Function func = model.getSelectedFunction();
+                        rankingButton.setEnabled(true);
+                        partitionButton.setEnabled(true);
+                        if (func.isPartition()) {
+                            if (!func.isAttribute()) {
+                                rankingButton.setEnabled(false);
+                            } else {
+                                AttributeFunction af = (AttributeFunction) func;
+                                Column col = af.getColumn();
+                                if (!col.isNumber()) {
+                                    rankingButton.setEnabled(false);
+                                }
+                            }
+                        } else if (func.isRanking()) {
+                            if (!func.isAttribute()) {
+                                partitionButton.setEnabled(false);
+                            }
+                        }
                     }
+                    localScaleButton.setSelected(model.isLocalScale());
                     return;
                 }
                 //Disable
@@ -321,12 +348,13 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
 
     private void initControls() {
         //Add ranking controls
-        toolbar.addRankingControl(localScaleButton);
+//        toolbar.addRankingControl(localScaleButton);
         toolbar.addRankingControl(splineButton);
+        toolbar.addRankingControl(partitionButton);
+        toolbar.addPartitionControl(rankingButton);
 
         //Add partition controls
-        toolbar.addPartitionControl(localScaleButton);
-
+//        toolbar.addPartitionControl(localScaleButton);
         //Actions
         localScaleButton.addActionListener(new ActionListener() {
             @Override
@@ -341,7 +369,7 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
                 if (splineEditor == null) {
                     splineEditor = new SplineEditor(NbBundle.getMessage(AppearanceTopComponent.class, "AppearanceTopComponent.splineEditor.title"));
                 }
-                Interpolator interpolator = function.getRanking().getInterpolator();
+                Interpolator interpolator = function.getInterpolator();
                 if (interpolator instanceof Interpolator.BezierInterpolator) {
                     Interpolator.BezierInterpolator bezierInterpolator = (Interpolator.BezierInterpolator) interpolator;
                     splineEditor.setControl1(bezierInterpolator.getControl1());
@@ -351,10 +379,30 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
                     splineEditor.setControl2(new Point2D.Float(1, 1));
                 }
                 splineEditor.setVisible(true);
-                function.getRanking().setInterpolator(
+                function.setInterpolator(
                         new Interpolator.BezierInterpolator(
                                 (float) splineEditor.getControl1().getX(), (float) splineEditor.getControl1().getY(),
                                 (float) splineEditor.getControl2().getX(), (float) splineEditor.getControl2().getY()));
+            }
+        });
+        rankingButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                controller.appearanceController.forceRankingFunction(model.getSelectedFunction());
+                Function newFunct = model.replaceSelectedFunction();
+                if (newFunct != null) {
+                    controller.setSelectedFunction(newFunct);
+                }
+            }
+        });
+        partitionButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                controller.appearanceController.forcePartitionFunction(model.getSelectedFunction());
+                Function newFunct = model.replaceSelectedFunction();
+                if (newFunct != null) {
+                    controller.setSelectedFunction(newFunct);
+                }
             }
         });
         applyButton.addActionListener(new ActionListener() {
@@ -469,6 +517,8 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
         centerPanel = new javax.swing.JPanel();
         controlToolbar = toolbar.getControlToolbar();
         localScaleButton = new javax.swing.JToggleButton();
+        rankingButton = new javax.swing.JButton();
+        partitionButton = new javax.swing.JButton();
         splineButton = new org.jdesktop.swingx.JXHyperlink();
         controlPanel = new javax.swing.JPanel();
         applyButton = new javax.swing.JButton();
@@ -535,6 +585,7 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
 
         controlToolbar.setFloatable(false);
         controlToolbar.setRollover(true);
+        controlToolbar.setMargin(new java.awt.Insets(0, 4, 0, 0));
         controlToolbar.setOpaque(false);
 
         localScaleButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/gephi/desktop/appearance/resources/funnel.png"))); // NOI18N
@@ -542,13 +593,27 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
         localScaleButton.setFocusable(false);
         controlToolbar.add(localScaleButton);
 
+        rankingButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/gephi/desktop/appearance/resources/ranking.png"))); // NOI18N
+        rankingButton.setToolTipText(org.openide.util.NbBundle.getMessage(AppearanceTopComponent.class, "AppearanceTopComponent.rankingButton.toolTipText")); // NOI18N
+        rankingButton.setFocusable(false);
+        rankingButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        rankingButton.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        controlToolbar.add(rankingButton);
+
+        partitionButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/gephi/desktop/appearance/resources/partition.png"))); // NOI18N
+        partitionButton.setToolTipText(org.openide.util.NbBundle.getMessage(AppearanceTopComponent.class, "AppearanceTopComponent.partitionButton.toolTipText")); // NOI18N
+        partitionButton.setFocusable(false);
+        partitionButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
+        partitionButton.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        controlToolbar.add(partitionButton);
+
         org.openide.awt.Mnemonics.setLocalizedText(splineButton, org.openide.util.NbBundle.getMessage(AppearanceTopComponent.class, "AppearanceTopComponent.splineButton.text")); // NOI18N
         splineButton.setToolTipText(org.openide.util.NbBundle.getMessage(AppearanceTopComponent.class, "AppearanceTopComponent.splineButton.toolTipText")); // NOI18N
         splineButton.setClickedColor(new java.awt.Color(0, 51, 255));
         splineButton.setFocusPainted(false);
         splineButton.setFocusable(false);
+        splineButton.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
         splineButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        splineButton.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
         controlToolbar.add(splineButton);
 
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -644,6 +709,8 @@ public class AppearanceTopComponent extends TopComponent implements Lookup.Provi
     private javax.swing.JToggleButton enableAutoButton;
     private javax.swing.JToggleButton localScaleButton;
     private javax.swing.JPanel mainPanel;
+    private javax.swing.JButton partitionButton;
+    private javax.swing.JButton rankingButton;
     private org.jdesktop.swingx.JXHyperlink splineButton;
     private javax.swing.JToggleButton stopAutoApplyButton;
     private javax.swing.JToolBar tranformerToolbar;

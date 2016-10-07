@@ -74,8 +74,8 @@ public class RotateLayout extends AbstractLayout implements Layout {
     @Override
     public void goAlgo() {
         graph = graphModel.getGraphVisible();
-        double sin = Math.sin(getAngle() * Math.PI / 180);
-        double cos = Math.cos(getAngle() * Math.PI / 180);
+        double sin = Math.sin(-getAngle() * Math.PI / 180);
+        double cos = Math.cos(-getAngle() * Math.PI / 180);
         double px = 0f;
         double py = 0f;
 
@@ -99,14 +99,14 @@ public class RotateLayout extends AbstractLayout implements Layout {
 
     @Override
     public LayoutProperty[] getProperties() {
-        List<LayoutProperty> properties = new ArrayList<LayoutProperty>();
+        List<LayoutProperty> properties = new ArrayList<>();
         try {
             properties.add(LayoutProperty.createProperty(
                     this, Double.class,
-                    NbBundle.getMessage(getClass(), "clockwise.angle.name"),
+                    NbBundle.getMessage(getClass(), "rotate.angle.name"),
                     null,
                     "clockwise.angle.name",
-                    NbBundle.getMessage(getClass(), "clockwise.angle.desc"),
+                    NbBundle.getMessage(getClass(), "rotate.angle.desc"),
                     "getAngle", "setAngle"));
         } catch (Exception e) {
             e.printStackTrace();
