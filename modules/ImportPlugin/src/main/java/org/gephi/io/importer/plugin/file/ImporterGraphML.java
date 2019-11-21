@@ -85,6 +85,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
     private static final String EDGE_SOURCE = "source";
     private static final String EDGE_TARGET = "target";
     private static final String EDGE_DIRECTED = "directed";
+    private static final String EDGE_TYPE = "label";
     private static final String ATTRIBUTE = "key";
     private static final String ATTRIBUTE_ID = "id";
     private static final String ATTRIBUTE_TITLE = "attr.name";
@@ -108,12 +109,13 @@ public class ImporterGraphML implements FileImporter, LongTask {
     public ImporterGraphML() {
         //Default node associations
         properties.addNodePropertyAssociation(NodeProperties.LABEL, "label");
-        properties.addNodePropertyAssociation(NodeProperties.LABEL, "d3");  // Default node label used by yEd from yworks.com.
+        properties.addNodePropertyAssociation(NodeProperties.LABEL, "nodelabel");
         properties.addNodePropertyAssociation(NodeProperties.X, "x");
         properties.addNodePropertyAssociation(NodeProperties.Y, "y");
+        properties.addNodePropertyAssociation(NodeProperties.Z, "z");
         properties.addNodePropertyAssociation(NodeProperties.X, "xpos");
         properties.addNodePropertyAssociation(NodeProperties.Y, "ypos");
-        properties.addNodePropertyAssociation(NodeProperties.Z, "z");
+        properties.addNodePropertyAssociation(NodeProperties.Z, "zpos");
         properties.addNodePropertyAssociation(NodeProperties.SIZE, "size");
         properties.addNodePropertyAssociation(NodeProperties.R, "r");
         properties.addNodePropertyAssociation(NodeProperties.G, "g");
@@ -123,11 +125,8 @@ public class ImporterGraphML implements FileImporter, LongTask {
         //Default edge associations
         properties.addEdgePropertyAssociation(EdgeProperties.LABEL, "label");
         properties.addEdgePropertyAssociation(EdgeProperties.LABEL, "edgelabel");
-        properties.addEdgePropertyAssociation(EdgeProperties.LABEL, "d7");  // Default edge label used by yEd from yworks.com.
         properties.addEdgePropertyAssociation(EdgeProperties.WEIGHT, "weight");
         properties.addEdgePropertyAssociation(EdgeProperties.WEIGHT, "Edge Weight");
-        properties.addEdgePropertyAssociation(EdgeProperties.ID, "id");
-        properties.addEdgePropertyAssociation(EdgeProperties.ID, "edgeid");
         properties.addEdgePropertyAssociation(EdgeProperties.R, "r");
         properties.addEdgePropertyAssociation(EdgeProperties.G, "g");
         properties.addEdgePropertyAssociation(EdgeProperties.B, "b");
@@ -196,7 +195,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         for (int i = 0; i < reader.getAttributeCount(); i++) {
             String attName = reader.getAttributeName(i).getLocalPart();
             if (GRAPH_DEFAULT_EDGETYPE.equalsIgnoreCase(attName)) {
-                defaultEdgeType = reader.getAttributeValue(i);
+                defaultEdgeType = reader.getAttributeValue(i).trim();
             } else if (GRAPH_ID.equalsIgnoreCase(attName)) {
                 id = reader.getAttributeValue(i);
             }
@@ -278,7 +277,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         for (int i = 0; i < reader.getAttributeCount(); i++) {
             String attName = reader.getAttributeName(i).getLocalPart();
             if (ATTVALUE_FOR.equalsIgnoreCase(attName)) {
-                fore = reader.getAttributeValue(i);
+                fore = reader.getAttributeValue(i).trim();
             }
         }
 
@@ -354,7 +353,6 @@ public class ImporterGraphML implements FileImporter, LongTask {
                 } catch (Exception e) {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGraphML.class, "importerGraphML_error_datavalue", fore, node, prop.toString()), Issue.Level.SEVERE));
                 }
-                return;
             }
 
             //Data attribute value
@@ -374,6 +372,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         String source = "";
         String target = "";
         String directed = "";
+        String type = null;
 
         //Attributes
         for (int i = 0; i < reader.getAttributeCount(); i++) {
@@ -386,6 +385,8 @@ public class ImporterGraphML implements FileImporter, LongTask {
                 id = reader.getAttributeValue(i);
             } else if (EDGE_DIRECTED.equalsIgnoreCase(attName)) {
                 directed = reader.getAttributeValue(i);
+            } else if (EDGE_TYPE.equalsIgnoreCase(attName)) {
+                type = reader.getAttributeValue(i).trim();
             }
         }
 
@@ -401,6 +402,10 @@ public class ImporterGraphML implements FileImporter, LongTask {
         NodeDraft nodeTarget = container.getNode(target);
         edge.setSource(nodeSource);
         edge.setTarget(nodeTarget);
+        if (type != null && !type.isEmpty()) {
+            //Edge labels not retained on graphml export https://github.com/gephi/gephi/issues/1516
+            edge.setType(type);
+        }
 
         //Type
         if (!directed.isEmpty()) {
@@ -418,9 +423,9 @@ public class ImporterGraphML implements FileImporter, LongTask {
 
         boolean end = false;
         while (reader.hasNext() && !end) {
-            int type = reader.next();
+            int elemType = reader.next();
 
-            switch (type) {
+            switch (elemType) {
                 case XMLStreamReader.START_ELEMENT:
                     if (ATTVALUE.equalsIgnoreCase(xmlReader.getLocalName())) {
                         readEdgeAttValue(reader, edge);
@@ -444,7 +449,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
         for (int i = 0; i < reader.getAttributeCount(); i++) {
             String attName = reader.getAttributeName(i).getLocalPart();
             if (ATTVALUE_FOR.equalsIgnoreCase(attName)) {
-                fore = reader.getAttributeValue(i);
+                fore = reader.getAttributeValue(i).trim();
             }
         }
 
@@ -510,7 +515,6 @@ public class ImporterGraphML implements FileImporter, LongTask {
                 } catch (Exception e) {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGraphML.class, "importerGraphML_error_datavalue", fore, edge, prop.toString()), Issue.Level.SEVERE));
                 }
-                return;
             }
 
             //Data attribute value
@@ -534,13 +538,13 @@ public class ImporterGraphML implements FileImporter, LongTask {
         for (int i = 0; i < reader.getAttributeCount(); i++) {
             String attName = reader.getAttributeName(i).getLocalPart();
             if (ATTRIBUTE_ID.equalsIgnoreCase(attName)) {
-                id = reader.getAttributeValue(i);
+                id = reader.getAttributeValue(i).trim();
             } else if (ATTRIBUTE_TYPE.equalsIgnoreCase(attName)) {
-                type = reader.getAttributeValue(i);
+                type = reader.getAttributeValue(i).trim();
             } else if (ATTRIBUTE_TITLE.equalsIgnoreCase(attName)) {
-                title = reader.getAttributeValue(i);
+                title = reader.getAttributeValue(i).trim();
             } else if (ATTRIBUTE_FOR.equalsIgnoreCase(attName)) {
-                forStr = reader.getAttributeValue(i);
+                forStr = reader.getAttributeValue(i).trim();
             }
         }
 
@@ -566,6 +570,7 @@ public class ImporterGraphML implements FileImporter, LongTask {
                     property = true;
                 }
             }
+
             if (property) {
                 return;
             }
@@ -672,7 +677,9 @@ public class ImporterGraphML implements FileImporter, LongTask {
                 column = container.addNodeColumn(id, attributeType);
                 column.setTitle(title);
                 report.log(NbBundle.getMessage(ImporterGraphML.class, "importerGraphML_log_nodeattribute", title, attributeType.getCanonicalName()));
-            } else if ("edge".equalsIgnoreCase(forStr) || "all".equalsIgnoreCase(forStr)) {
+            }
+
+            if ("edge".equalsIgnoreCase(forStr) || "all".equalsIgnoreCase(forStr)) {
                 if (container.getEdgeColumn(id) != null) {
                     report.log(NbBundle.getMessage(ImporterGraphML.class, "importerGraphML_error_attributecolumn_exist", id));
                     return;

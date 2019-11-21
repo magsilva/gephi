@@ -63,26 +63,25 @@ public class MultiProcessor extends DefaultProcessor implements Processor {
 
     @Override
     public void process() {
-        if (containers.length <= 1) {
-            throw new RuntimeException("This processor can only handle multiple containers");
-        }
-
-        ProjectController pc = Lookup.getDefault().lookup(ProjectController.class);
-        for (ContainerUnloader container : containers) {
-            if(workspace != null) {
-                pc.openWorkspace(workspace);
-            } else {
-                workspace = pc.newWorkspace(pc.getCurrentProject());
+        try {
+            if (containers.length <= 1) {
+                throw new RuntimeException("This processor can only handle multiple containers");
             }
-            processConfiguration(container, workspace);
-            process(container, workspace);
-            workspace = null;
-        }
 
-        //Clean
-        workspace = null;
-        graphModel = null;
-        containers = null;
-        progressTicket = null;
+            ProjectController pc = Lookup.getDefault().lookup(ProjectController.class);
+            for (ContainerUnloader container : containers) {
+                if (workspace != null) {
+                    pc.openWorkspace(workspace);
+                } else {
+                    workspace = pc.newWorkspace(pc.getCurrentProject());
+                }
+                processConfiguration(container, workspace);
+                process(container, workspace);
+                workspace = null;
+            }
+
+        } finally {
+            clean();
+        }
     }
 }

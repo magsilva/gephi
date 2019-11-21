@@ -82,14 +82,14 @@ public class ModularityNGTest {
     @Test
     public void testTwoConnectedNodesModularity() {
         GraphModel graphModel = GraphGenerator.generateCompleteUndirectedGraph(2);
-        UndirectedGraph hgraph = graphModel.getUndirectedGraph();
+        UndirectedGraph graph = graphModel.getUndirectedGraph();
 
         Modularity mod = new Modularity();
 
-        Modularity.CommunityStructure theStructure = mod.new CommunityStructure(hgraph);
-        int[] comStructure = new int[hgraph.getNodeCount()];
+        Modularity.CommunityStructure theStructure = mod.new CommunityStructure(graph);
+        int[] comStructure = new int[graph.getNodeCount()];
 
-        HashMap<String, Double> modularityValues = mod.computeModularity(hgraph, theStructure, comStructure,
+        HashMap<String, Double> modularityValues = mod.computeModularity(graph, theStructure, comStructure,
                 1., true, false);
 
         double modValue = modularityValues.get("modularity");
@@ -103,14 +103,14 @@ public class ModularityNGTest {
     @Test
     public void testGraphWithouLinksModularity() {
         GraphModel graphModel = GraphGenerator.generateNullUndirectedGraph(5);
-        UndirectedGraph hgraph = graphModel.getUndirectedGraph();
+        UndirectedGraph graph = graphModel.getUndirectedGraph();
 
         Modularity mod = new Modularity();
 
-        Modularity.CommunityStructure theStructure = mod.new CommunityStructure(hgraph);
-        int[] comStructure = new int[hgraph.getNodeCount()];
+        Modularity.CommunityStructure theStructure = mod.new CommunityStructure(graph);
+        int[] comStructure = new int[graph.getNodeCount()];
 
-        HashMap<String, Double> modularityValues = mod.computeModularity(hgraph, theStructure, comStructure,
+        HashMap<String, Double> modularityValues = mod.computeModularity(graph, theStructure, comStructure,
                 1., true, false);
 
         double modValue = modularityValues.get("modularity");
@@ -251,10 +251,10 @@ public class ModularityNGTest {
         undirectedGraph.addNode(node8);
 
         //Test 3 parallel edges summing weight = 10
-        //Related issue ==> #1419 Getting null pointer error when trying to calculate modularity
-        Edge edge12_1 = graphModel.factory().newEdge(node1, node2, 0, 2.f, false);
-        Edge edge12_2 = graphModel.factory().newEdge(node1, node2, 0, 5.f, false);
-        Edge edge12_3 = graphModel.factory().newEdge(node1, node2, 0, 3.f, false);
+        //Related issues ==> #1419 Getting null pointer error when trying to calculate modularity; #1526 NullPointerException on Modularity Statistics with gexf with kind / parallel nodes
+        Edge edge12_1 = graphModel.factory().newEdge(node1, node2, 1, 2.f, false);
+        Edge edge12_2 = graphModel.factory().newEdge(node1, node2, 2, 5.f, false);
+        Edge edge12_3 = graphModel.factory().newEdge(node1, node2, 2, 3.f, false);
         
         Edge edge23 = graphModel.factory().newEdge(node2, node3, false);
         Edge edge34 = graphModel.factory().newEdge(node3, node4, 0, 10.f, false);
@@ -279,13 +279,13 @@ public class ModularityNGTest {
         undirectedGraph.addEdge(edge78_2);
         undirectedGraph.addEdge(edge81);
 
-        UndirectedGraph hgraph = graphModel.getUndirectedGraph();
+        UndirectedGraph graph = graphModel.getUndirectedGraph();
         Modularity mod = new Modularity();
 
-        Modularity.CommunityStructure theStructure = mod.new CommunityStructure(hgraph);
-        int[] comStructure = new int[hgraph.getNodeCount()];
+        Modularity.CommunityStructure theStructure = mod.new CommunityStructure(graph);
+        int[] comStructure = new int[graph.getNodeCount()];
 
-        HashMap<String, Double> modularityValues = mod.computeModularity(hgraph, theStructure, comStructure,
+        HashMap<String, Double> modularityValues = mod.computeModularity(graph, theStructure, comStructure,
                 1., true, true);
 
         int class1 = comStructure[0];

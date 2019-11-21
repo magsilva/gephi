@@ -113,6 +113,27 @@ public class DegreeNGTest {
     }
 
     @Test
+    public void testSelfLoopGraphDegree() {
+        GraphModel graphModel = GraphGenerator.generateSelfLoopUndirectedGraph(1);
+        Graph graph = graphModel.getGraph();
+        Node n = graph.getNode("0");
+        Degree d = new Degree();
+        int degree = d.calculateDegree(graph, n);
+        assertEquals(degree, 2);
+    }
+
+    @Test
+    public void testSelfLoopDirectedGraphDegree() {
+        GraphModel graphModel = GraphGenerator.generateSelfLoopDirectedGraph(1);
+        DirectedGraph graph = graphModel.getDirectedGraph();
+        Node n = graph.getNode("0");
+        Degree d = new Degree();
+        assertEquals(d.calculateDegree(graph, n), 2);
+        assertEquals(d.calculateInDegree(graph, n), 1);
+        assertEquals(d.calculateOutDegree(graph, n), 1);
+    }
+
+    @Test
     public void testStarGraphDegree() {
         GraphModel graphModel = GraphGenerator.generateStarUndirectedGraph(5);
         Graph graph = graphModel.getGraph();
@@ -155,7 +176,7 @@ public class DegreeNGTest {
         assertEquals(inDegree1, 0);
         assertEquals(inDegree2, 1);
         assertEquals(outDegree1, 1);
-        assertEquals(avDegree, 1.0);
+        assertEquals(avDegree, 0.5);
     }
 
     @Test
@@ -173,7 +194,7 @@ public class DegreeNGTest {
         assertEquals(inDegree3, 1);
         assertEquals(degree1, 2);
         assertEquals(outDegree5, 1);
-        assertEquals(avDegree, 2.0);
+        assertEquals(avDegree, 1.0);
     }
 
     @Test

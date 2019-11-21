@@ -220,8 +220,12 @@ public abstract class ElementDraftImpl implements ElementDraft {
 
     @Override
     public void setValue(String key, Object value) {
+        if (value == null) {
+            throw new NullPointerException("Value can't be null");
+        }
+
         Class type = value.getClass();
-        if (AttributeUtils.isDynamicType(type)) {
+        if (AttributeUtils.isDynamicType(type) && !TimeSet.class.isAssignableFrom(type)) {
             type = AttributeUtils.getStaticType(type);
         }
         ColumnDraft column = getColumn(key, type);
@@ -280,24 +284,21 @@ public abstract class ElementDraftImpl implements ElementDraft {
     @Override
     public void parseAndSetValue(String key, String value) {
         ColumnDraft column = getColumn(key);
-        Class typeClass;
         if (column.isDynamic()) {
             if (container.getTimeRepresentation().equals(TimeRepresentation.INTERVAL)) {
                 if (container.getInterval() != null) {
                     parseAndSetValue(key, value, container.getInterval().getLow(), container.getInterval().getHigh());
                     return;
                 }
-                typeClass = AttributeUtils.getIntervalMapType(column.getTypeClass());
             } else {
                 if (container.getTimestamp() != null) {
                     parseAndSetValue(key, value, container.getTimestamp());
                     return;
                 }
-                typeClass = AttributeUtils.getTimestampMapType(column.getTypeClass());
             }
-        } else {
-            typeClass = column.getTypeClass();
         }
+
+        Class typeClass = column.getResolvedTypeClass(container);
         Object val = AttributeUtils.parse(value, typeClass);
         setValue(key, val);
     }
@@ -448,25 +449,23 @@ public abstract class ElementDraftImpl implements ElementDraft {
     //UTILITY
     protected void setAttributeValue(ColumnDraft column, Object value) throws Exception {
         int index = ((ColumnDraftImpl) column).getIndex();
-        value = AttributeUtils.standardizeValue(value);
-        Class typeClass = column.getTypeClass();
 
-        if (column.isDynamic()) {
-            if (container.getTimeRepresentation() == TimeRepresentation.INTERVAL) {
-                typeClass = AttributeUtils.getIntervalMapType(typeClass);
-            } else {
-                typeClass = AttributeUtils.getTimestampMapType(typeClass);
-            }
+        if (!(value instanceof TimeSet)) {
+            value = AttributeUtils.standardizeValue(value);
         }
+
+        Class typeClass = column.getResolvedTypeClass(container);
 
         if (!value.getClass().equals(typeClass)) {
             throw new RuntimeException("The expected value class was " + typeClass.getSimpleName() + " and " + value.getClass().getSimpleName() + " was found");
         }
+
         if (index >= attributes.length) {
             Object[] newArray = new Object[index + 1];
             System.arraycopy(attributes, 0, newArray, 0, attributes.length);
             attributes = newArray;
         }
+
         attributes[index] = value;
     }
 

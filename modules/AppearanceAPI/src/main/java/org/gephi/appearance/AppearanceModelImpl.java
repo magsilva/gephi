@@ -97,10 +97,6 @@ public class AppearanceModelImpl implements AppearanceModel {
     //
     private final FunctionsModel functionsMain;
     private final Map<Graph, FunctionsModel> functions = new HashMap<>();
-    //Forced
-    private final Set<String> forcedRanking;
-    private final Set<String> forcedPartition;
-    private final List<Column> forcedColumnsRefresh;
 
     public AppearanceModelImpl(Workspace workspace) {
         this.workspace = workspace;
@@ -110,9 +106,6 @@ public class AppearanceModelImpl implements AppearanceModel {
         this.transformerUIs = initTransformerUIs();
         this.nodeTransformers = initNodeTransformers();
         this.edgeTransformers = initEdgeTransformers();
-        this.forcedPartition = new HashSet<>();
-        this.forcedRanking = new HashSet<>();
-        this.forcedColumnsRefresh = new ArrayList<>();
 
         //Functions
         functionsMain = new FunctionsModel(graphModel.getGraph());
@@ -186,6 +179,7 @@ public class AppearanceModelImpl implements AppearanceModel {
     @Override
     public Partition getNodePartition(Graph graph, Column column) {
         synchronized (functionLock) {
+            refreshFunctions(graph);
             FunctionsModel m;
             if (graph.getView().isMainView()) {
                 m = functionsMain;
@@ -202,6 +196,7 @@ public class AppearanceModelImpl implements AppearanceModel {
     @Override
     public Partition getEdgePartition(Graph graph, Column column) {
         synchronized (functionLock) {
+            refreshFunctions(graph);
             FunctionsModel m;
             if (graph.getView().isMainView()) {
                 m = functionsMain;
@@ -215,29 +210,8 @@ public class AppearanceModelImpl implements AppearanceModel {
         }
     }
 
-    protected void forceRanking(Function function) {
-        if (function instanceof AttributeFunction) {
-            Column col = ((AttributeFunction) function).getColumn();
-            String id = getIdCol(col);
-            forcedColumnsRefresh.add(col);
-            forcedPartition.remove(id);
-            forcedRanking.add(id);
-        }
-    }
-
-    protected void forcePartition(Function function) {
-        if (function instanceof AttributeFunction) {
-            Column col = ((AttributeFunction) function).getColumn();
-            String id = getIdCol(col);
-            forcedColumnsRefresh.add(col);
-            forcedRanking.remove(id);
-            forcedPartition.add(id);
-        }
-    }
-
     private FunctionsModel refreshFunctions(Graph graph) {
         synchronized (functionLock) {
-
             FunctionsModel m;
             if (graph.getView().isMainView()) {
                 m = functionsMain;
@@ -497,15 +471,18 @@ public class AppearanceModelImpl implements AppearanceModel {
 
         protected void refreshFunctions() {
             graph.readLock();
-            boolean graphHasChanged = graphObserver.isNew() || graphObserver.hasGraphChanged();
-            if (graphHasChanged) {
-                if (graphObserver.isNew()) {
-                    graphObserver.hasGraphChanged();
+            try {
+                boolean graphHasChanged = graphObserver.isNew() || graphObserver.hasGraphChanged();
+                if (graphHasChanged) {
+                    if (graphObserver.isNew()) {
+                        graphObserver.hasGraphChanged();
+                    }
+                    refreshGraphFunctions();
                 }
-                refreshGraphFunctions();
+                refreshAttributeFunctions(graphHasChanged);
+            } finally {
+                graph.readUnlockAll();
             }
-            refreshAttributeFunctions(graphHasChanged);
-            graph.readUnlock();
         }
 
         private void refreshAttributeFunctions(boolean graphHasChanged) {
@@ -519,7 +496,7 @@ public class AppearanceModelImpl implements AppearanceModel {
             //Clean
             for (Iterator<Map.Entry<Column, ColumnObserver>> itr = columnObservers.entrySet().iterator(); itr.hasNext();) {
                 Map.Entry<Column, ColumnObserver> entry = itr.next();
-                if (!columns.contains(entry.getKey()) || forcedColumnsRefresh.contains(entry.getKey())) {
+                if (!columns.contains(entry.getKey())) {
                     rankings.remove(getIdCol(entry.getKey()));
                     partitions.remove(getIdCol(entry.getKey()));
                     for (Transformer t : getTransformers()) {
@@ -533,7 +510,7 @@ public class AppearanceModelImpl implements AppearanceModel {
             }
 
             //Get columns to be refreshed
-            Set<Column> toRefreshColumns = new HashSet<>(forcedColumnsRefresh);
+            Set<Column> toRefreshColumns = new HashSet<>();
             for (Column column : columns) {
                 if (!columnObservers.containsKey(column)) {
                     columnObservers.put(column, column.createColumnObserver(false));
@@ -542,26 +519,25 @@ public class AppearanceModelImpl implements AppearanceModel {
                     toRefreshColumns.add(column);
                 }
             }
-            forcedColumnsRefresh.clear();
 
             //Refresh ranking and partitions
             for (Column column : toRefreshColumns) {
                 RankingImpl ranking = rankings.get(getIdCol(column));
                 PartitionImpl partition = partitions.get(getIdCol(column));
                 if (ranking == null && partition == null) {
-                    String id = getIdCol(column);
-                    if (forcedPartition.contains(id) || (!forcedRanking.contains(id) && isPartition(graph, column))) {
+                    if (isPartition(graph, column)) {
                         if (column.isIndexed()) {
                             partition = new AttributePartitionImpl(column, getIndex(false));
                         } else {
                             partition = new AttributePartitionImpl(column, graph);
                         }
                         partitions.put(getIdCol(column), partition);
-                    } else if (forcedRanking.contains(id) || (!forcedPartition.contains(id) && isRanking(graph, column))) {
+                    }
+                    if (isRanking(graph, column)) {
                         if (column.isIndexed()) {
-                            ranking = new AttributeRankingImpl(column, getIndex(localScale));
+                            ranking = new AttributeRankingImpl(column, graph, getIndex(localScale));
                         } else {
-                            ranking = new AttributeRankingImpl(column, graph);
+                            ranking = new AttributeRankingImpl(column, graph, null);
                         }
                         rankings.put(getIdCol(column), ranking);
                     }
@@ -660,14 +636,10 @@ public class AppearanceModelImpl implements AppearanceModel {
     }
 
     private boolean isPartition(Graph graph, Column column) {
-        double ratio;
         if (column.isDynamic()) {
             if (!column.isNumber()) {
                 return true;
             }
-            Set<Object> set = new HashSet<>();
-            boolean hasNullValue = false;
-            int elements = 0;
             ElementIterable<? extends Element> iterable = AttributeUtils.isNodeColumn(column) ? graph.getNodes() : graph.getEdges();
             for (Element el : iterable) {
                 TimeMap val = (TimeMap) el.getAttribute(column);
@@ -675,15 +647,14 @@ public class AppearanceModelImpl implements AppearanceModel {
                     Object[] va = val.toValuesArray();
                     for (Object v : va) {
                         if (v != null) {
-                            set.add(v);
-                        } else {
-                            hasNullValue = true;
+                            iterable.doBreak();
+                            return true;
                         }
-                        elements++;
                     }
                 }
             }
-            ratio = set.size() / (double) elements;
+
+            return false;
         } else if (column.isIndexed()) {
             if (!column.isNumber()) {
                 return true;
@@ -694,18 +665,10 @@ public class AppearanceModelImpl implements AppearanceModel {
             } else {
                 index = graphModel.getEdgeIndex(graph.getView());
             }
-            int valueCount = index.countValues(column);
-            int elementCount = index.countElements(column);
-            ratio = valueCount / (double) elementCount;
+            return index.countValues(column) > 0;
         } else {
             return false;
         }
-        Class typeClass = column.getTypeClass();
-        typeClass = column.isDynamic() ? AttributeUtils.getStaticType(typeClass) : typeClass;
-        if (typeClass.equals(Integer.class) || typeClass.equals(Byte.class) || typeClass.equals(Short.class)) {
-            return ratio <= 0.3;
-        }
-        return ratio <= 0.05;
     }
 
     private boolean isRanking(Graph graph, Column column) {
@@ -717,7 +680,7 @@ public class AppearanceModelImpl implements AppearanceModel {
                     return true;
                 }
             }
-        } else if (!column.isDynamic() && column.isIndexed() && column.isNumber()) {
+        } else if (!column.isDynamic() && !column.isArray() && column.isIndexed() && column.isNumber()) {
             Index index;
             if (AttributeUtils.isNodeColumn(column)) {
                 index = localScale ? graphModel.getNodeIndex(graph.getView()) : graphModel.getNodeIndex();

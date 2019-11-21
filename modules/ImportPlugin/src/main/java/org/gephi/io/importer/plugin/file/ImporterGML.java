@@ -152,6 +152,7 @@ public class ImporterGML implements FileImporter, LongTask
                     case ' ':
                     case '\t':
                     case '\n':
+<<<<<<< HEAD
                         if (stringBuffer.length() == 0) {
                             try {
                             	Integer intValue = Integer.valueOf(stringBuffer.toString());
@@ -163,6 +164,20 @@ public class ImporterGML implements FileImporter, LongTask
 	                            } catch (NumberFormatException eDouble) {
 	                            	list.add(stringBuffer.toString()); // Actually add an empty string
 	                            }
+=======
+                        if (!stringBuffer.isEmpty()) {
+                            //First try to parse as long, if not possible, try double.
+                            try {
+                                Long longValue = Long.valueOf(stringBuffer);
+                                list.add(longValue);
+                            } catch (NumberFormatException e1) {
+                                try {
+                                    Double doubleValue = Double.valueOf(stringBuffer);
+                                    list.add(doubleValue);
+                                } catch (NumberFormatException e2) {
+                                    list.add(stringBuffer);
+                                }
+>>>>>>> 56b8733f03a3aaaa4bcc3ca63744c803f9d7a4c3
                             }
                             stringBuffer.setLength(0);
                         }
@@ -189,6 +204,7 @@ public class ImporterGML implements FileImporter, LongTask
             if ("node".equals(key)) {
                 ret = parseNode((ArrayList<?>) value);
             } else if ("edge".equals(key)) {
+<<<<<<< HEAD
                 ret = parseEdge((ArrayList<?>) value);
             } else if (EDGE_TYPE_DIRECTED.equalsIgnoreCase((String) key)) {
                 if (value instanceof Integer) {
@@ -196,6 +212,12 @@ public class ImporterGML implements FileImporter, LongTask
                     container.setEdgeDefault(edgeDefault);
 		} else if (value instanceof Double) {
                     EdgeDirectionDefault edgeDefault = ((Double) value) == 1.0 ? EdgeDirectionDefault.DIRECTED : EdgeDirectionDefault.UNDIRECTED;
+=======
+                ret = parseEdge((ArrayList) value);
+            } else if ("directed".equals(key)) {
+                if (value instanceof Number) {
+                    EdgeDirectionDefault edgeDefault = ((Number) value).intValue() == 1 ? EdgeDirectionDefault.DIRECTED : EdgeDirectionDefault.UNDIRECTED;
+>>>>>>> 56b8733f03a3aaaa4bcc3ca63744c803f9d7a4c3
                     container.setEdgeDefault(edgeDefault);
                 } else {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_directedgraphparse"), Issue.Level.WARNING));
@@ -256,14 +278,14 @@ public class ImporterGML implements FileImporter, LongTask
                 if (!ret) {
                     break;
                 }
-            } else if ("x".equalsIgnoreCase(key) && value instanceof Double) {
-                node.setX(((Double) value).floatValue());
-            } else if ("y".equalsIgnoreCase(key) && value instanceof Double) {
-                node.setY(((Double) value).floatValue());
-            } else if ("z".equalsIgnoreCase(key) && value instanceof Double) {
-                node.setZ(((Double) value).floatValue());
-            } else if ("w".equalsIgnoreCase(key) && value instanceof Double) {
-                node.setSize(((Double) value).floatValue());
+            } else if ("x".equalsIgnoreCase(key) && value instanceof Number) {
+                node.setX(((Number) value).floatValue());
+            } else if ("y".equalsIgnoreCase(key) && value instanceof Number) {
+                node.setY(((Number) value).floatValue());
+            } else if ("z".equalsIgnoreCase(key) && value instanceof Number) {
+                node.setZ(((Number) value).floatValue());
+            } else if ("w".equalsIgnoreCase(key) && value instanceof Number) {
+                node.setSize(((Number) value).floatValue());
             } else if ("h".equalsIgnoreCase(key)) {
             } else if ("d".equalsIgnoreCase(key)) {
             } else if ("fill".equalsIgnoreCase(key)) {
@@ -290,9 +312,15 @@ public class ImporterGML implements FileImporter, LongTask
             } else if (EDGE_TARGET.equalsIgnoreCase(key)) {
                 NodeDraft target = container.getNode(value.toString());
                 edgeDraft.setTarget(target);
+<<<<<<< HEAD
             } else if (EDGE_VALUE.equalsIgnoreCase(key) || EDGE_WEIGHT.equalsIgnoreCase(key)) {
                 if (value instanceof Double) {
                     edgeDraft.setWeight(((Double) value));
+=======
+            } else if ("value".equals(key) || "weight".equals(key)) {
+                if (value instanceof Number) {
+                    edgeDraft.setWeight(((Number) value).doubleValue());
+>>>>>>> 56b8733f03a3aaaa4bcc3ca63744c803f9d7a4c3
                 }
             } else if (EDGE_LABEL.equalsIgnoreCase(key)) {
                 edgeDraft.setLabel(value.toString());
@@ -317,10 +345,17 @@ public class ImporterGML implements FileImporter, LongTask
                 if (!ret) {
                     break;
                 }
+<<<<<<< HEAD
             } else if (EDGE_TYPE_DIRECTED.equalsIgnoreCase(key)) {
                 if (value instanceof Integer) {
                     EdgeDirection type = ((Integer) value) == 1 ? EdgeDirection.DIRECTED : EdgeDirection.UNDIRECTED;
                     edge.setType(type);
+=======
+            } else if ("directed".equalsIgnoreCase(key)) {
+                if (value instanceof Number) {
+                    EdgeDirection type = ((Number) value).intValue() == 1 ? EdgeDirection.DIRECTED : EdgeDirection.UNDIRECTED;
+                    edge.setDirection(type);
+>>>>>>> 56b8733f03a3aaaa4bcc3ca63744c803f9d7a4c3
                 } else {
                     report.logIssue(new Issue(NbBundle.getMessage(ImporterGML.class, "importerGML_error_directedparse", edge.toString()), Issue.Level.WARNING));
                 }

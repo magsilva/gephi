@@ -41,20 +41,13 @@
  */
 package org.gephi.datalab.impl;
 
-import com.csvreader.CsvReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -79,7 +72,6 @@ import org.gephi.graph.api.types.IntervalMap;
 import org.gephi.graph.api.types.TimestampMap;
 import org.gephi.utils.StatisticsUtils;
 import org.joda.time.DateTimeZone;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.ServiceProvider;
 
@@ -102,7 +94,7 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         if (value != null && !value.getClass().equals(targetType)) {
             try {
                 GraphModel graphModel = column.getTable().getGraph().getModel();
-                
+
                 String stringValue = AttributeUtils.print(value, graphModel.getTimeFormat(), graphModel.getTimeZone());
                 value = AttributeUtils.parse(stringValue, targetType);//Try to convert to target type from string representation
             } catch (Exception ex) {
@@ -617,264 +609,77 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         return numbers.toArray(new Number[0]);
     }
 
-    @Override
-    public void importCSVToNodesTable(Graph graph, File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean assignNewNodeIds) {
-        if (columnNames == null || columnNames.length == 0) {
-            return;
-        }
+    /**
+     * Finds the same edge (same source, target, and directedness) in the graph. If directed = false (undirected), it finds the reversed undirected edge too.
+     *
+     * @param graph Graph
+     * @param id Optional id, to enforce the edge id to match too
+     * @param source Source node
+     * @param target Target node
+     * @param directed Directedness of the edge to find
+     * @return The found edge or null if not found
+     */
+    private Edge findEdge(Graph graph, String id, Node source, Node target, boolean directed) {
+        Edge edge = null;
+        if (id != null) {
+            //Try to find same edge with same id, if the id is provided:
+            edge = graph.getEdge(id);
 
-        if (columnTypes == null || columnNames.length != columnTypes.length) {
-            throw new IllegalArgumentException("Column names length must be the same as column types length");
-        }
+            boolean sameEdgeDefinition = true;
 
-        CsvReader reader = null;
-        try {
-            //Prepare attribute columns for the column names, creating the not already existing columns:
-            Table nodesTable = graph.getModel().getNodeTable();
-            String idColumn = null;
-            HashMap<Column, String> columnHeaders = new HashMap<>();//Necessary because of column name case insensitivity, to map columns to its corresponding csv header.
-            for (int i = 0; i < columnNames.length; i++) {
-                //Separate first id column found from the list to use as id. If more are found later, the will not be in the list and be ignored.
-                if (columnNames[i].equalsIgnoreCase("id")) {
-                    if (idColumn == null) {
-                        idColumn = columnNames[i];
+            if (edge.isDirected() != directed) {
+                sameEdgeDefinition = false;
+            } else {
+                if (directed) {
+                    if (edge.getSource() != source || edge.getTarget() != target) {
+                        sameEdgeDefinition = false;
                     }
-                } else if (nodesTable.hasColumn(columnNames[i])) {
-                    Column column = nodesTable.getColumn(columnNames[i]);
-                    columnHeaders.put(column, columnNames[i]);
                 } else {
-                    Column column = addAttributeColumn(nodesTable, columnNames[i], columnTypes[i]);
-                    if (column != null) {
-                        columnHeaders.put(column, columnNames[i]);
-                    }
-                }
-            }
-
-            Set<Column> columnList = columnHeaders.keySet();
-
-            //Create nodes:
-            GraphElementsController gec = Lookup.getDefault().lookup(GraphElementsController.class);
-            String id;
-            Node node;
-            reader = new CsvReader(new FileInputStream(file), separator, charset);
-            reader.setTrimWhitespace(false);
-            reader.readHeaders();
-            while (reader.readRecord()) {
-                //Prepare the correct node to assign the attributes:
-                if (idColumn != null) {
-                    id = reader.get(idColumn);
-                    if (id == null || id.isEmpty()) {
-                        node = gec.createNode(null, graph);//id null or empty, assign one
-                    } else {
-                        graph.readLock();
-                        node = graph.getNode(id);
-                        graph.readUnlock();
-                        if (node != null) {//Node with that id already in graph
-                            if (assignNewNodeIds) {
-                                node = gec.createNode(null, graph);
-                            }
-                        } else {
-                            node = gec.createNode(null, id, graph);//New id in the graph
+                    if (edge.getSource() == source) {
+                        if (edge.getTarget() != target) {
+                            sameEdgeDefinition = false;
                         }
-                    }
-                } else {
-                    node = gec.createNode(null);
-                }
-                //Assign attributes to the current node:
-                for (Column column : columnList) {
-                    setAttributeValue(reader.get(columnHeaders.get(column)), node, column);
-                }
-            }
-        } catch (FileNotFoundException ex) {
-            Exceptions.printStackTrace(ex);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        } finally {
-            if (reader != null) {
-                reader.close();
-            }
-        }
-    }
-
-    @Override
-    public void importCSVToEdgesTable(Graph graph, File file, Character separator, Charset charset, String[] columnNames, Class[] columnTypes, boolean createNewNodes) {
-        if (columnNames == null || columnNames.length == 0) {
-            return;
-        }
-
-        if (columnTypes == null || columnNames.length != columnTypes.length) {
-            throw new IllegalArgumentException("Column names length must be the same as column types length");
-        }
-
-        CsvReader reader = null;
-        try {
-            //Prepare attribute columns for the column names, creating the not already existing columns:
-            Table edgesTable = graph.getModel().getEdgeTable();
-            Column weightColumn = edgesTable.getColumn("Weight");
-            boolean isDynamicWeight = weightColumn.isDynamic();
-
-            String idColumnHeader = null;
-            String sourceColumnHeader = null;
-            String targetColumnHeader = null;
-            String typeColumnHeader = null;
-            String weightColumnHeader = null;
-            HashMap<Column, String> columnHeaders = new HashMap<>();//Necessary because of column name case insensitivity, to map columns to its corresponding csv header.
-            for (int i = 0; i < columnNames.length; i++) {
-                //Separate first id column found from the list to use as id. If more are found later, the will not be in the list and be ignored.
-                if (columnNames[i].equalsIgnoreCase("id")) {
-                    if (idColumnHeader == null) {
-                        idColumnHeader = columnNames[i];
-                    }
-                } else if (columnNames[i].equalsIgnoreCase("source") && sourceColumnHeader == null) {//Separate first source column found from the list to use as source node id
-                    sourceColumnHeader = columnNames[i];
-                } else if (columnNames[i].equalsIgnoreCase("target") && targetColumnHeader == null) {//Separate first target column found from the list to use as target node id
-                    targetColumnHeader = columnNames[i];
-                } else if (columnNames[i].equalsIgnoreCase("type") && typeColumnHeader == null) {//Separate first type column found from the list to use as edge type (directed/undirected)
-                    typeColumnHeader = columnNames[i];
-                } else if (edgesTable.hasColumn(columnNames[i])) {
-                    //Any other existing column:
-                    Column column = edgesTable.getColumn(columnNames[i]);
-                    columnHeaders.put(column, columnNames[i]);
-                    if (column.equals(weightColumn)) {
-                        weightColumnHeader = columnNames[i];
-                    }
-                } else {
-                    //New column:
-                    Column column = addAttributeColumn(edgesTable, columnNames[i], columnTypes[i]);
-                    if (column != null) {
-                        columnHeaders.put(column, columnNames[i]);
-                    }
-                }
-            }
-
-            Set<Column> columnList = columnHeaders.keySet();
-
-            //Create edges:
-            GraphElementsController gec = Lookup.getDefault().lookup(GraphElementsController.class);
-            reader = new CsvReader(new FileInputStream(file), separator, charset);
-            reader.setTrimWhitespace(false);
-            reader.readHeaders();
-
-            int recordNumber = 0;
-            while (reader.readRecord()) {
-                String id;
-                Edge edge = null;
-                String sourceId, targetId;
-                Node source, target;
-                String type;
-                boolean directed;
-
-                recordNumber++;
-                sourceId = reader.get(sourceColumnHeader);
-                targetId = reader.get(targetColumnHeader);
-
-                if (sourceId == null || sourceId.trim().isEmpty() || targetId == null || targetId.trim().isEmpty()) {
-                    Logger.getLogger("").log(Level.WARNING, "Ignoring record {0} due to empty source and/or target node ids", recordNumber);
-                    continue;//No correct source and target ids were provided, ignore row
-                }
-
-                graph.readLock();
-                source = graph.getNode(sourceId);
-                graph.readUnlock();
-
-                if (source == null) {
-                    if (createNewNodes) {//Create new nodes when they don't exist already and option is enabled
-                        if (source == null) {
-                            source = gec.createNode(null, sourceId, graph);
+                    } else if (edge.getTarget() == source) {
+                        if (edge.getSource() != target) {
+                            sameEdgeDefinition = false;
                         }
                     } else {
-                        continue;//Ignore this edge row, since no new nodes should be created.
-                    }
-                }
-
-                graph.readLock();
-                target = graph.getNode(targetId);
-                graph.readUnlock();
-
-                if (target == null) {
-                    if (createNewNodes) {//Create new nodes when they don't exist already and option is enabled
-                        if (target == null) {
-                            target = gec.createNode(null, targetId, graph);
-                        }
-                    } else {
-                        continue;//Ignore this edge row, since no new nodes should be created.
-                    }
-                }
-
-                if (typeColumnHeader != null) {
-                    type = reader.get(typeColumnHeader);
-                    //Undirected if indicated correctly, otherwise always directed:
-                    if (type != null) {
-                        directed = !type.equalsIgnoreCase("undirected");
-                    } else {
-                        directed = true;
-                    }
-                } else {
-                    directed = true;//Directed by default when not indicated
-                }
-
-                //Prepare the correct edge to assign the attributes:
-                if (idColumnHeader != null) {
-                    id = reader.get(idColumnHeader);
-                    if (id == null || id.isEmpty()) {
-                        edge = gec.createEdge(source, target, directed);//id null or empty, assign one
-                    } else {
-                        Edge edgeById = graph.getEdge(id);
-
-                        if (edgeById == null) {
-                            edge = gec.createEdge(id, source, target, directed);
-                        }
-                        if (edge == null) {//Edge with that id already in graph
-                            edge = gec.createEdge(source, target, directed);
-                        }
-                    }
-                } else {
-                    edge = gec.createEdge(source, target, directed);
-                }
-
-                if (edge != null) {//Edge could be created because it does not already exist:
-                    //Assign all attributes to the new edge:
-                    for (Column column : columnList) {
-                        setAttributeValue(reader.get(columnHeaders.get(column)), edge, column);
-                    }
-                } else {
-                    edge = graph.getEdge(source, target);
-                    if (edge == null) {
-                        //Not from source to target but undirected and reverse?
-                        edge = graph.getEdge(target, source);
-                        if (edge != null && edge.isDirected()) {
-                            edge = null;//Cannot use it since it's actually directed
-                        }
-                    }
-                    if (edge != null) {
-                        //Increase non dynamic edge weight with specified weight (if specified), else increase by 1:
-                        if (!isDynamicWeight) {
-                            if (weightColumnHeader != null) {
-                                String weight = reader.get(weightColumnHeader);
-                                try {
-                                    Float weightFloat = Float.parseFloat(weight);
-                                    edge.setWeight(edge.getWeight() + weightFloat);
-                                } catch (NumberFormatException numberFormatException) {
-                                    //Not valid weight, add 1
-                                    edge.setWeight(edge.getWeight() + 1);
-                                }
-                            } else {
-                                //Add 1 (weight not specified)
-                                edge.setWeight(edge.getWeight() + 1);
-                            }
-                        }
+                        //Edge data is different even when the id coincides:
+                        sameEdgeDefinition = false;
                     }
                 }
             }
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger("").log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger("").log(Level.SEVERE, null, ex);
-        } finally {
-            if (reader != null) {
-                reader.close();
+
+            if (!sameEdgeDefinition) {
+                Logger.getLogger("").log(
+                        Level.WARNING,
+                        "Found edge with correct id = {0} but different definition (wanted = [source = {1}, target = {2}, directed = {3}]; found = [source = {4}, target = {5}, directed = {6}]). Cannot use this edge",
+                        new Object[]{
+                            id,
+                            source.getId(), target.getId(), directed,
+                            edge.getSource().getId(), edge.getTarget().getId(), edge.isDirected()
+                        }
+                );
+                //Edge data is different even when the id coincides:
+                edge = null;
+            }
+        } else {
+            //Find a similar edge with any id:
+            if (edge == null) {
+                edge = graph.getEdge(source, target);
+            }
+
+            if (edge == null && !directed) {
+                //Not from source to target but undirected and reverse?
+                edge = graph.getEdge(target, source);
+            }
+
+            if (edge != null && edge.isDirected() != directed) {
+                edge = null;//Cannot use it since directedness is different
             }
         }
+
+        return edge;
     }
 
     @Override
@@ -916,10 +721,10 @@ public class AttributeColumnsControllerImpl implements AttributeColumnsControlle
         Graph graph = Lookup.getDefault().lookup(GraphController.class).getGraphModel().getGraph();
         Object value;
         String strValue;
-        
+
         TimeFormat timeFormat = graph.getModel().getTimeFormat();
         DateTimeZone timeZone = graph.getModel().getTimeZone();
-        
+
         for (Node node : graph.getNodes().toArray()) {
             value = node.getAttribute(column);
             if (value != null) {

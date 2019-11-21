@@ -51,12 +51,12 @@ import org.openide.util.lookup.ServiceProvider;
 
 /**
  *
- * @author Helder Suzuki <heldersuzuki@gephi.org>>
+ * @author Helder Suzuki
  */
 @ServiceProvider(service = LayoutBuilder.class)
 public class Contract implements LayoutBuilder {
 
-    private ContractLayoutUI ui = new ContractLayoutUI();
+    private final ContractLayoutUI ui = new ContractLayoutUI();
 
     @Override
     public String getName() {
@@ -64,8 +64,8 @@ public class Contract implements LayoutBuilder {
     }
 
     @Override
-    public ScaleLayout buildLayout() {
-        return new ScaleLayout(this, 0.8);
+    public ContractLayout buildLayout() {
+        return new ContractLayout(this, 0.8);
     }
 
     @Override

@@ -49,6 +49,7 @@ import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.NodeIterable;
 import org.gephi.graph.api.Table;
 import org.gephi.statistics.spi.Statistics;
 import org.gephi.utils.longtask.spi.LongTask;
@@ -150,7 +151,9 @@ public class Modularity implements Statistics, LongTask {
             communities = new ArrayList<>();
             int index = 0;
             weights = new double[N];
-            for (Node node : graph.getNodes()) {
+            
+            NodeIterable nodesIterable = graph.getNodes();
+            for (Node node : nodesIterable) {
                 map.put(node, index);
                 nodeCommunities[index] = new Community(this);
 
@@ -164,11 +167,15 @@ public class Modularity implements Statistics, LongTask {
                 communities.add(nodeCommunities[index]);
                 index++;
                 if (isCanceled) {
+                    nodesIterable.doBreak();
                     return;
                 }
             }
-
-            for (Node node : graph.getNodes()) {
+            
+            int[] edgeTypes = graph.getModel().getEdgeTypes();
+            
+            nodesIterable = graph.getNodes();
+            for (Node node : nodesIterable) {
                 int node_index = map.get(node);
                 topology[node_index] = new ArrayList<>();
 
@@ -181,11 +188,13 @@ public class Modularity implements Statistics, LongTask {
                     float weight = 0;
 
                     //Sum all parallel edges weight:
-                    for (Edge edge : graph.getEdges(node, neighbor)) {
-                        if (useWeight) {
-                            weight += edge.getWeight(graph.getView());
-                        } else {
-                            weight += 1;
+                    for (int edgeType : edgeTypes) {
+                        for (Edge edge : graph.getEdges(node, neighbor, edgeType)) {
+                            if (useWeight) {
+                                weight += edge.getWeight(graph.getView());
+                            } else {
+                                weight += 1;
+                            }
                         }
                     }
 
@@ -213,6 +222,7 @@ public class Modularity implements Statistics, LongTask {
                 }
 
                 if (isCanceled) {
+                    nodesIterable.doBreak();
                     return;
                 }
             }
@@ -473,22 +483,23 @@ public class Modularity implements Statistics, LongTask {
         isCanceled = false;
 
         graph.readLock();
+        try {
+            structure = new Modularity.CommunityStructure(graph);
+            int[] comStructure = new int[graph.getNodeCount()];
 
-        structure = new Modularity.CommunityStructure(graph);
-        int[] comStructure = new int[graph.getNodeCount()];
+            if (graph.getNodeCount() > 0) {//Fixes issue #713 Modularity Calculation Throws Exception On Empty Graph
+                HashMap<String, Double> computedModularityMetrics = computeModularity(graph, structure, comStructure, resolution, isRandomized, useWeight);
+                modularity = computedModularityMetrics.get("modularity");
+                modularityResolution = computedModularityMetrics.get("modularityResolution");
+            } else {
+                modularity = 0;
+                modularityResolution = 0;
+            }
 
-        if (graph.getNodeCount() > 0) {//Fixes issue #713 Modularity Calculation Throws Exception On Empty Graph
-            HashMap<String, Double> computedModularityMetrics = computeModularity(graph, structure, comStructure, resolution, isRandomized, useWeight);
-            modularity = computedModularityMetrics.get("modularity");
-            modularityResolution = computedModularityMetrics.get("modularityResolution");
-        } else {
-            modularity = 0;
-            modularityResolution = 0;
+            saveValues(comStructure, graph, structure);
+        } finally {
+            graph.readUnlock();
         }
-
-        saveValues(comStructure, graph, structure);
-
-        graph.readUnlock();
     }
 
     protected HashMap<String, Double> computeModularity(Graph graph, CommunityStructure theStructure, int[] comStructure,
@@ -503,7 +514,6 @@ public class Modularity implements Statistics, LongTask {
         HashMap<String, Double> results = new HashMap<>();
 
         if (isCanceled) {
-            graph.readUnlockAll();
             return results;
         }
         boolean someChange = true;
@@ -525,13 +535,11 @@ public class Modularity implements Statistics, LongTask {
                         localChange = true;
                     }
                     if (isCanceled) {
-                        graph.readUnlockAll();
                         return results;
                     }
                 }
                 someChange = localChange || someChange;
                 if (isCanceled) {
-                    graph.readUnlockAll();
                     return results;
                 }
             }

@@ -66,6 +66,7 @@ import org.gephi.utils.longtask.api.LongTaskErrorHandler;
 import org.gephi.utils.longtask.api.LongTaskExecutor;
 import org.gephi.utils.longtask.api.LongTaskListener;
 import org.gephi.utils.longtask.spi.LongTask;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
 /**
@@ -99,7 +100,7 @@ public class LayoutModelImpl implements LayoutModel {
         executor.setDefaultErrorHandler(new LongTaskErrorHandler() {
             @Override
             public void fatalError(Throwable t) {
-                Logger.getLogger("").log(Level.SEVERE, "", t.getCause() != null ? t.getCause() : t);
+                Exceptions.printStackTrace(t);
             }
         });
     }
@@ -194,7 +195,7 @@ public class LayoutModelImpl implements LayoutModel {
                     savedProperties.put(new LayoutPropertyKey(p.getCanonicalName(), layout.getClass().getName()), value);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Exceptions.printStackTrace(e);
             }
         }
     }
@@ -213,7 +214,7 @@ public class LayoutModelImpl implements LayoutModel {
                     try {
                         property.getProperty().setValue(savedProperties.get(l));
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Exceptions.printStackTrace(e);
                     }
                 }
             }

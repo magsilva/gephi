@@ -50,6 +50,7 @@ import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.NodeIterable;
 import org.gephi.graph.api.Table;
 import org.gephi.statistics.spi.Statistics;
 import org.gephi.utils.longtask.spi.LongTask;
@@ -97,10 +98,11 @@ public class WeightedDegree implements Statistics, LongTask {
         initializeAttributeColunms(graph.getModel());
 
         graph.readLock();
-
-        avgWDegree = calculateAverageWeightedDegree(graph, isDirected, true);
-
-        graph.readUnlockAll();
+        try {
+            avgWDegree = calculateAverageWeightedDegree(graph, isDirected, true);
+        } finally {
+            graph.readUnlockAll();
+        }
     }
 
     public double calculateAverageWeightedDegree(Graph graph, boolean isDirected, boolean updateAttributes) {
@@ -114,7 +116,8 @@ public class WeightedDegree implements Statistics, LongTask {
 
         Progress.start(progress, graph.getNodeCount());
 
-        for (Node n : graph.getNodes()) {
+        NodeIterable nodesIterable = graph.getNodes();
+        for (Node n : nodesIterable) {
             double totalWeight = 0;
             if (isDirected) {
                 double totalInWeight = 0;
@@ -136,7 +139,7 @@ public class WeightedDegree implements Statistics, LongTask {
                 updateDegreeDists(totalInWeight, totalOutWeight, totalWeight);
             } else {
                 for (Edge e : graph.getEdges(n)) {
-                    totalWeight += e.getWeight();
+                    totalWeight += (e.isSelfLoop() ? 2 : 1) * e.getWeight();
                 }
                 n.setAttribute(WDEGREE, totalWeight);
                 updateDegreeDists(totalWeight);
@@ -145,12 +148,13 @@ public class WeightedDegree implements Statistics, LongTask {
             averageWeightedDegree += totalWeight;
 
             if (isCanceled) {
+                nodesIterable.doBreak();
                 break;
             }
             Progress.progress(progress);
         }
 
-        averageWeightedDegree /= (isDirected) ? 2 * graph.getNodeCount() : graph.getNodeCount();
+        averageWeightedDegree /= (isDirected ? 2.0 : 1.0) * graph.getNodeCount();
 
         return averageWeightedDegree;
 
@@ -201,7 +205,7 @@ public class WeightedDegree implements Statistics, LongTask {
 
     @Override
     public String getReport() {
-        String report = "";
+        String report;
 
         if (isDirected) {
             report = getDirectedReport();

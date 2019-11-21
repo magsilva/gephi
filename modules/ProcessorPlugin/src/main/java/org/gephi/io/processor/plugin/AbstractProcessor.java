@@ -41,65 +41,105 @@
  */
 package org.gephi.io.processor.plugin;
 
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import java.awt.Color;
-import org.gephi.graph.api.AttributeUtils;
+import java.util.HashSet;
+import java.util.Set;
+import org.gephi.graph.api.Column;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Element;
 import org.gephi.graph.api.GraphModel;
+import org.gephi.graph.api.Interval;
 import org.gephi.graph.api.Node;
 import org.gephi.graph.api.Origin;
 import org.gephi.graph.api.Table;
 import org.gephi.graph.api.TimeRepresentation;
+import org.gephi.graph.api.types.IntervalDoubleMap;
+import org.gephi.graph.api.types.IntervalMap;
+import org.gephi.graph.api.types.IntervalSet;
 import org.gephi.graph.api.types.TimeMap;
 import org.gephi.graph.api.types.TimeSet;
+import org.gephi.graph.api.types.TimestampDoubleMap;
+import org.gephi.graph.api.types.TimestampSet;
 import org.gephi.io.importer.api.ColumnDraft;
 import org.gephi.io.importer.api.ContainerUnloader;
 import org.gephi.io.importer.api.EdgeDraft;
+import org.gephi.io.importer.api.EdgeMergeStrategy;
 import org.gephi.io.importer.api.ElementDraft;
+import org.gephi.io.importer.api.Issue;
 import org.gephi.io.importer.api.NodeDraft;
+import org.gephi.io.importer.api.Report;
+import org.gephi.io.processor.spi.Processor;
 import org.gephi.project.api.Workspace;
+import org.gephi.utils.Attributes;
 import org.gephi.utils.progress.ProgressTicket;
+import org.openide.util.NbBundle;
 
-public abstract class AbstractProcessor {
+public abstract class AbstractProcessor implements Processor {
 
     protected ProgressTicket progressTicket;
     protected Workspace workspace;
     protected ContainerUnloader[] containers;
     protected GraphModel graphModel;
 
+    private final Set<Column> columnsTypeMismatchAlreadyWarned = new HashSet<>();
+    protected Report report = new Report();
+    protected Report reportAfterDone = new Report();
+    private final Object2IntOpenHashMap<Edge> edgeCountForAverage = new Object2IntOpenHashMap<>();
+
+    protected void clean() {
+        workspace = null;
+        graphModel = null;
+        containers = null;
+        progressTicket = null;
+        columnsTypeMismatchAlreadyWarned.clear();
+        //Flush report and create a new one for next process:
+        reportAfterDone = report;
+        report = new Report();
+        edgeCountForAverage.clear();
+    }
+
     protected void flushColumns(ContainerUnloader container) {
+        addColumnsToTable(container, graphModel.getNodeTable(), container.getNodeColumns());
+        addColumnsToTable(container, graphModel.getEdgeTable(), container.getEdgeColumns());
+    }
+
+    private void addColumnsToTable(ContainerUnloader container, Table table, Iterable<ColumnDraft> columns) {
         TimeRepresentation timeRepresentation = container.getTimeRepresentation();
-        Table nodeTable = graphModel.getNodeTable();
-        for (ColumnDraft col : container.getNodeColumns()) {
-            if (!nodeTable.hasColumn(col.getId())) {
-                Class typeClass = col.getTypeClass();
-                if (col.isDynamic()) {
-                    if (timeRepresentation.equals(TimeRepresentation.TIMESTAMP)) {
-                        typeClass = AttributeUtils.getTimestampMapType(typeClass);
-                    } else {
-                        typeClass = AttributeUtils.getIntervalMapType(typeClass);
+        for (ColumnDraft col : columns) {
+            if (!table.hasColumn(col.getId())) {
+                Class typeClass = col.getResolvedTypeClass(container);
+                
+                if (Attributes.isTypeAvailable(typeClass, timeRepresentation)) {
+                    Object defaultValue = col.getResolvedDefaultValue(container);
+                    if (defaultValue != null && !typeClass.isAssignableFrom(defaultValue.getClass())) {
+                        String error = NbBundle.getMessage(
+                                AbstractProcessor.class, "AbstractProcessor.error.columnDefaultValueTypeMismatch",
+                                col.getId(),
+                                defaultValue.toString(),
+                                defaultValue.getClass().getSimpleName(),
+                                typeClass.getSimpleName()
+                        );
+
+                        report.logIssue(new Issue(error, Issue.Level.SEVERE));
+                        defaultValue = null;
                     }
+
+                    table.addColumn(col.getId(), col.getTitle(), typeClass, Origin.DATA, defaultValue, !col.isDynamic());
+                } else {
+                    String error = NbBundle.getMessage(
+                            AbstractProcessor.class, "AbstractProcessor.error.unavailableColumnType",
+                            typeClass.getSimpleName(),
+                            timeRepresentation.name(),
+                            col.getId()
+                    );
+                    report.logIssue(new Issue(error, Issue.Level.SEVERE));
                 }
-                nodeTable.addColumn(col.getId(), col.getTitle(), typeClass, Origin.DATA, col.getDefaultValue(), !col.isDynamic());
-            }
-        }
-        Table edgeTable = graphModel.getEdgeTable();
-        for (ColumnDraft col : container.getEdgeColumns()) {
-            if (!edgeTable.hasColumn(col.getId())) {
-                Class typeClass = col.getTypeClass();
-                if (col.isDynamic()) {
-                    if (timeRepresentation.equals(TimeRepresentation.TIMESTAMP)) {
-                        typeClass = AttributeUtils.getTimestampMapType(typeClass);
-                    } else {
-                        typeClass = AttributeUtils.getIntervalMapType(typeClass);
-                    }
-                }
-                edgeTable.addColumn(col.getId(), col.getTitle(), typeClass, Origin.DATA, col.getDefaultValue(), !col.isDynamic());
             }
         }
     }
 
-    protected void flushToNode(NodeDraft nodeDraft, Node node) {
+    protected void flushToNode(ContainerUnloader container, NodeDraft nodeDraft, Node node) {
         if (nodeDraft.getColor() != null) {
             node.setColor(nodeDraft.getColor());
         }
@@ -151,79 +191,118 @@ public abstract class AbstractProcessor {
         }
 
         //Attributes
-        flushToElementAttributes(nodeDraft, node);
+        flushToElementAttributes(container, nodeDraft, node);
     }
 
-    protected void flushEdgeWeight(EdgeDraft edgeDraft, Edge edge) {
-        Object val = edgeDraft.getValue("weight");
-        if (val != null && val instanceof TimeMap) {
-            TimeMap valMap = (TimeMap) val;
-
-            TimeMap existingMap = (TimeMap) edge.getAttribute("weight");
-            if (existingMap != null) {
-                Object[] keys = ((TimeMap) val).toKeysArray();
-                Object[] vals = ((TimeMap) val).toValuesArray();
-
-                for (int i = 0; i < keys.length; i++) {
-                    valMap.put(keys[i], ((Number) vals[i]).doubleValue());
-                }
+    protected void flushToElementAttributes(ContainerUnloader container, ElementDraft elementDraft, Element element) {
+        for (ColumnDraft columnDraft : elementDraft.getColumns()) {
+            if (elementDraft instanceof EdgeDraft && columnDraft.getId().equalsIgnoreCase("weight")) {
+                continue;//Special weight column
             }
 
-            edge.setAttribute("weight", val);
-        }
-    }
+            Object val = elementDraft.getValue(columnDraft.getId());
 
-    protected void flushToElementAttributes(ElementDraft elementDraft, Element element) {
-        for (ColumnDraft col : elementDraft.getColumns()) {
-            if (elementDraft instanceof EdgeDraft && col.getId().equals("weight")) {
+            Column column = element.getTable().getColumn(columnDraft.getId());
+            if (column == null) {
+                continue;//The column might be not present, for cases when it cannot be added due to time representation mismatch, etc
+            }
+
+            if (column.isReadOnly()) {
                 continue;
             }
-            Object val = elementDraft.getValue(col.getId());
-            if (val != null) {
-                TimeMap existingMap;
-                if (col.isDynamic() && (existingMap = (TimeMap) element.getAttribute(col.getId())) != null && !existingMap.isEmpty()) {
-                    TimeMap valMap = (TimeMap) val;
 
-                    Object[] keys = existingMap.toKeysArray();
-                    Object[] vals = existingMap.toValuesArray();
-                    for (int i = 0; i < keys.length; i++) {
-                        valMap.put(keys[i], vals[i]);
-                    }
-                    element.setAttribute(col.getId(), valMap);
-                } else {
-                    element.setAttribute(col.getId(), val);
+            Class columnDraftTypeClass = columnDraft.getResolvedTypeClass(container);
+
+            if (!column.getTypeClass().equals(columnDraftTypeClass)) {
+                if (!columnsTypeMismatchAlreadyWarned.contains(column)) {
+                    columnsTypeMismatchAlreadyWarned.add(column);
+
+                    String error = NbBundle.getMessage(
+                            AbstractProcessor.class, "AbstractProcessor.error.columnTypeMismatch",
+                            column.getId(),
+                            column.getTypeClass().getSimpleName(),
+                            columnDraftTypeClass.getSimpleName()
+                    );
+
+                    report.logIssue(new Issue(error, Issue.Level.SEVERE));
                 }
+
+                continue;//Incompatible types!
+            }
+
+            if (val != null) {
+                Object processedNewValue = val;
+
+                Object existingValue = element.getAttribute(columnDraft.getId());
+
+                if (columnDraft.isDynamic() && existingValue != null) {
+                    if (TimeMap.class.isAssignableFrom(columnDraft.getTypeClass())) {
+                        TimeMap existingMap = (TimeMap) existingValue;
+                        if (!existingMap.isEmpty()) {
+                            TimeMap valMap = (TimeMap) val;
+                            TimeMap newMap = (TimeMap) existingMap;
+
+                            Object[] keys = valMap.toKeysArray();
+                            Object[] vals = valMap.toValuesArray();
+                            for (int i = 0; i < keys.length; i++) {
+                                try {
+                                    newMap.put(keys[i], vals[i]);
+                                } catch (IllegalArgumentException e) {
+                                    //Overlapping intervals, ignore
+                                }
+                            }
+
+                            processedNewValue = newMap;
+                        }
+                    } else if (TimeSet.class.isAssignableFrom(columnDraft.getTypeClass())) {
+                        TimeSet existingTimeSet = (TimeSet) existingValue;
+
+                        processedNewValue = mergeTimeSets(existingTimeSet, (TimeSet) val);
+                    }
+                }
+
+                element.setAttribute(columnDraft.getId(), processedNewValue);
             }
         }
     }
 
-    protected void flushToEdge(EdgeDraft edgeDraft, Edge edge) {
-        if (edgeDraft.getColor() != null) {
-            edge.setColor(edgeDraft.getColor());
-        } else {
-            edge.setR(0f);
-            edge.setG(0f);
-            edge.setB(0f);
-            edge.setAlpha(0f);
-        }
+    protected void flushToEdge(ContainerUnloader container, EdgeDraft edgeDraft, Edge edge, boolean newEdge) {
+        //Edge weight
+        flushEdgeWeight(container, edgeDraft, edge, newEdge);
 
-        if (edgeDraft.getLabel() != null) {
-            edge.setLabel(edgeDraft.getLabel());
-        }
+        //Replace data when a new edge is created or the merge strategy is not to keep the first edge data:
+        EdgeMergeStrategy edgesMergeStrategy = containers[0].getEdgesMergeStrategy();
+        if (newEdge || edgesMergeStrategy != EdgeMergeStrategy.FIRST) {
+            if (edgeDraft.getColor() != null) {
+                edge.setColor(edgeDraft.getColor());
+            } else {
+                edge.setR(0f);
+                edge.setG(0f);
+                edge.setB(0f);
+                edge.setAlpha(0f);
+            }
 
-        if (edge.getTextProperties() != null) {
-            edge.getTextProperties().setVisible(edgeDraft.isLabelVisible());
-        }
+            if (edgeDraft.getLabel() != null) {
+                edge.setLabel(edgeDraft.getLabel());
+            }
 
-        if (edgeDraft.getLabelSize() != -1f && edge.getTextProperties() != null) {
-            edge.getTextProperties().setSize(edgeDraft.getLabelSize());
-        }
+            if (edge.getTextProperties() != null) {
+                edge.getTextProperties().setVisible(edgeDraft.isLabelVisible());
+            }
 
-        if (edgeDraft.getLabelColor() != null && edge.getTextProperties() != null) {
-            Color labelColor = edgeDraft.getLabelColor();
-            edge.getTextProperties().setColor(labelColor);
-        } else {
-            edge.getTextProperties().setColor(new Color(0, 0, 0, 0));
+            if (edgeDraft.getLabelSize() != -1f && edge.getTextProperties() != null) {
+                edge.getTextProperties().setSize(edgeDraft.getLabelSize());
+            }
+
+            if (edgeDraft.getLabelColor() != null && edge.getTextProperties() != null) {
+                Color labelColor = edgeDraft.getLabelColor();
+                edge.getTextProperties().setColor(labelColor);
+            } else {
+                edge.getTextProperties().setColor(new Color(0, 0, 0, 0));
+            }
+
+            //Attributes
+            flushToElementAttributes(container, edgeDraft, edge);
         }
 
         //Timeset
@@ -237,33 +316,180 @@ public abstract class AbstractProcessor {
         } else if (edgeDraft.getGraphInterval() != null) {
             edge.addInterval(edgeDraft.getGraphInterval());
         }
+    }
 
-        //Dynamic edge weight (if any)
-        flushEdgeWeight(edgeDraft, edge);
+    protected void flushEdgeWeight(ContainerUnloader container, EdgeDraft edgeDraft, Edge edge, boolean newEdge) {
+        Column weightColumn = graphModel.getEdgeTable().getColumn("weight");
+        ColumnDraft weightColumnDraft = container.getEdgeColumn("weight");
 
-        //Attributes
-        flushToElementAttributes(edgeDraft, edge);
+        boolean weightColumnDraftIsDynamic = weightColumnDraft != null && weightColumnDraft.isDynamic();
+
+        if (weightColumn.isDynamic() != weightColumnDraftIsDynamic) {
+            Class weightColumnDraftTypeClass = weightColumnDraft != null ? weightColumnDraft.getResolvedTypeClass(container): Double.class;
+            if (!columnsTypeMismatchAlreadyWarned.contains(weightColumn)) {
+                columnsTypeMismatchAlreadyWarned.add(weightColumn);
+
+                String error = NbBundle.getMessage(
+                        AbstractProcessor.class, "AbstractProcessor.error.columnTypeMismatch",
+                        weightColumn.getId(),
+                        weightColumn.getTypeClass().getSimpleName(),
+                        weightColumnDraftTypeClass.getSimpleName()
+                );
+
+                report.logIssue(new Issue(error, Issue.Level.SEVERE));
+            }
+
+            return;
+        }
+
+        if (weightColumn.isDynamic()) {
+            Object val = edgeDraft.getValue("weight");
+            if (val != null && val instanceof TimeMap) {
+                TimeMap valMap = (TimeMap) val;
+                if (Number.class.isAssignableFrom(valMap.getTypeClass())) {
+                    final TimeMap newMap;
+                    if (val instanceof IntervalMap) {
+                        newMap = new IntervalDoubleMap();
+                    } else {
+                        newMap = new TimestampDoubleMap();
+                    }
+
+                    TimeMap existingMap = (TimeMap) edge.getAttribute("weight");
+                    if (existingMap != null) {
+                        Object[] keys2 = existingMap.toKeysArray();
+                        Object[] vals2 = existingMap.toValuesArray();
+
+                        for (int i = 0; i < keys2.length; i++) {
+                            newMap.put(keys2[i], ((Number) vals2[i]).doubleValue());
+                        }
+                    }
+
+                    Object[] keys1 = valMap.toKeysArray();
+                    Object[] vals1 = valMap.toValuesArray();
+
+                    for (int i = 0; i < keys1.length; i++) {
+                        try {
+                            newMap.put(keys1[i], ((Number) vals1[i]).doubleValue());
+                        } catch (IllegalArgumentException e) {
+                            //Overlapping intervals, ignore
+                        }
+                    }
+
+                    edge.setAttribute("weight", newMap);
+                }
+            }
+        } else if (!newEdge) {
+            if (edgeDraft.getTimeSet() != null || edgeDraft.getValue("timeset") != null || edge.getAttribute("timeset") != null) {
+                //Don't merge double (non dynamic) weights when the edges have dynamic time intervals/timestamps, they are the same edge in different periods of time
+                return;
+            }
+
+            //Merge the existing edge and the draft edge weights:
+            double result = edge.getWeight();
+
+            edgeCountForAverage.addTo(edge, 1);
+            int edgeCount = edgeCountForAverage.getInt(edge);
+
+            switch (containers[0].getEdgesMergeStrategy()) {
+                case AVG:
+                    result = (edge.getWeight() * edgeCount + edgeDraft.getWeight()) / (edgeCount + 1);
+                    break;
+                case MAX:
+                    result = Math.max(edgeDraft.getWeight(), edge.getWeight());
+                    break;
+                case MIN:
+                    result = Math.min(edgeDraft.getWeight(), edge.getWeight());
+                    break;
+                case SUM:
+                    result = edgeDraft.getWeight() + edge.getWeight();
+                    break;
+                case FIRST:
+                    result = edge.getWeight();
+                    break;
+                case LAST:
+                    result = edgeDraft.getWeight();
+                    break;
+                default:
+                    break;
+            }
+
+            edge.setWeight(result);
+        }
     }
 
     protected void flushTimeSet(TimeSet timeSet, Element element) {
         TimeSet existingTimeSet = (TimeSet) element.getAttribute("timeset");
-        if (existingTimeSet != null && !existingTimeSet.isEmpty()) {
-            for (Object o : existingTimeSet.toArray()) {
-                existingTimeSet.add(o);
-            }
-        }
-        element.setAttribute("timeset", timeSet);
+        element.setAttribute("timeset", mergeTimeSets(existingTimeSet, timeSet));
     }
 
+    protected TimeSet mergeTimeSets(TimeSet set1, TimeSet set2) {
+        if (set1 instanceof IntervalSet) {
+            return mergeIntervalSets((IntervalSet) set1, (IntervalSet) set2);
+        } else if (set1 instanceof TimestampSet) {
+            return mergeTimestampSets((TimestampSet) set1, (TimestampSet) set2);
+        } else {
+            return set2;//Set 1 must be null
+        }
+    }
+
+    protected IntervalSet mergeIntervalSets(IntervalSet set1, IntervalSet set2) {
+        IntervalSet merged = new IntervalSet();
+        for (Interval i : set1.toArray()) {
+            merged.add(i);
+        }
+
+        boolean overlappingIntervals = false;
+        for (Interval i : set2.toArray()) {
+            try {
+                merged.add(i);
+            } catch (IllegalArgumentException e) {
+                //Catch overlapping intervals not allowed
+                overlappingIntervals = true;
+            }
+        }
+
+        if (overlappingIntervals) {
+            String warning = NbBundle.getMessage(
+                    AbstractProcessor.class, "AbstractProcessor.warning.overlappingIntervals",
+                    set1.toString(graphModel.getTimeFormat(), graphModel.getTimeZone()),
+                    set2.toString(graphModel.getTimeFormat(), graphModel.getTimeZone()),
+                    merged.toString(graphModel.getTimeFormat(), graphModel.getTimeZone())
+            );
+            report.logIssue(new Issue(warning, Issue.Level.WARNING));
+        }
+
+        return merged;
+    }
+
+    protected TimestampSet mergeTimestampSets(TimestampSet set1, TimestampSet set2) {
+        TimestampSet merged = new TimestampSet();
+        for (Double t : set1.toArray()) {
+            merged.add(t);
+        }
+        for (Double t : set2.toArray()) {
+            merged.add(t);
+        }
+
+        return merged;
+    }
+
+    @Override
     public void setWorkspace(Workspace workspace) {
         this.workspace = workspace;
     }
 
+    @Override
     public void setContainers(ContainerUnloader[] containers) {
         this.containers = containers;
     }
 
+    @Override
     public void setProgressTicket(ProgressTicket progressTicket) {
         this.progressTicket = progressTicket;
+    }
+
+    @Override
+    public Report getReport() {
+        return reportAfterDone;
     }
 }

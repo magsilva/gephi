@@ -210,11 +210,87 @@ public final class ImportUtils {
         }
     }
 
-    public static FileObject getArchivedFile(FileObject fileObject) {
-        if (FileUtil.isArchiveFile(fileObject)) {
-            fileObject = FileUtil.getArchiveRoot(fileObject).getChildren()[0];
+    public static boolean isArchiveFile(FileObject fileObject) {
+        if (fileObject == null) {
+            return false;
         }
-        return fileObject;
+
+        if (fileObject.getExt().toLowerCase().startsWith("xls")) {//Seems to break it otherwise!
+            return false;
+        }
+
+        boolean isGz = fileObject.getExt().equalsIgnoreCase("gz");
+        boolean isBzip = fileObject.getExt().equalsIgnoreCase("bz2");
+
+        if (isGz || isBzip) {
+            return true;
+        }
+
+        return FileUtil.isArchiveFile(fileObject);
+    }
+
+    public static FileObject getArchivedFile(final FileObject fileObject) {
+        if (!isArchiveFile(fileObject)) {
+            return fileObject;
+        }
+
+        FileObject result = fileObject;
+
+        // ZIP and JAR archives
+        if (FileUtil.isArchiveFile(fileObject)) {
+            FileObject[] children = FileUtil.getArchiveRoot(fileObject).getChildren();
+            if (children.length > 0) {
+                result = children[0];
+            }
+        } else { // GZ or BZIP2 archives
+            boolean isGz = fileObject.getExt().equalsIgnoreCase("gz");
+            boolean isBzip = fileObject.getExt().equalsIgnoreCase("bz2");
+            if (isGz || isBzip) {
+                try {
+                    String[] splittedFileName = fileObject.getName().split("\\.");
+                    if (splittedFileName.length < 2) {
+                        return fileObject;
+                    }
+
+                    String fileExt1 = splittedFileName[splittedFileName.length - 1];
+                    String fileExt2 = splittedFileName[splittedFileName.length - 2];
+
+                    File tempFile;
+                    if (fileExt1.equalsIgnoreCase("tar")) {
+                        String fname = fileObject.getName().replaceAll("\\.tar$", "");
+                        fname = fname.replace(fileExt2, "");
+                        tempFile = File.createTempFile(fname, "." + fileExt2);
+                        // Untar & unzip
+                        if (isGz) {
+                            tempFile = getGzFile(fileObject, tempFile, true);
+                        } else {
+                            tempFile = getBzipFile(fileObject, tempFile, true);
+                        }
+                    } else {
+                        String fname = fileObject.getName();
+                        fname = fname.replace(fileExt1, "");
+                        tempFile = File.createTempFile(fname, "." + fileExt1);
+                        // Unzip
+                        if (isGz) {
+                            tempFile = getGzFile(fileObject, tempFile, false);
+                        } else {
+                            tempFile = getBzipFile(fileObject, tempFile, false);
+                        }
+                    }
+                    tempFile.deleteOnExit();
+                    tempFile = FileUtil.normalizeFile(tempFile);
+                    result = FileUtil.toFileObject(tempFile);
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }
+
+        if (result == null) {
+            result = fileObject;//Never return null if the archive is empty, broken or anything
+        }
+
+        return result;
     }
 
     public static File getBzipFile(FileObject in, File out, boolean isTar) throws IOException {

@@ -41,8 +41,13 @@
  */
 package org.gephi.statistics.plugin;
 
+import it.unimi.dsi.fastutil.objects.Object2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.gephi.graph.api.Column;
 import org.gephi.graph.api.DirectedGraph;
 import org.gephi.graph.api.Edge;
@@ -51,6 +56,7 @@ import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
+import org.gephi.graph.api.NodeIterable;
 import org.gephi.graph.api.Table;
 import org.gephi.graph.api.UndirectedGraph;
 import org.gephi.statistics.spi.Statistics;
@@ -65,9 +71,7 @@ import org.jfree.data.xy.XYSeriesCollection;
 import org.openide.util.Lookup;
 
 /**
- * Ref: Sergey Brin, Lawrence Page, The Anatomy of a Large-Scale Hypertextual
- * Web Search Engine, in Proceedings of the seventh International Conference on
- * the World Wide Web (WWW1998):107-117
+ * Ref: Sergey Brin, Lawrence Page, The Anatomy of a Large-Scale Hypertextual Web Search Engine, in Proceedings of the seventh International Conference on the World Wide Web (WWW1998):107-117
  *
  * @author pjmcswee
  */
@@ -130,20 +134,21 @@ public class PageRank implements Statistics, LongTask {
         execute(graph);
     }
 
-    public void execute(Graph hgraph) {
+    public void execute(Graph graph) {
         isCanceled = false;
 
-        Column column = initializeAttributeColunms(hgraph.getModel());
+        Column column = initializeAttributeColunms(graph.getModel());
 
-        hgraph.readLock();
+        graph.readLock();
+        try {
+            HashMap<Node, Integer> indicies = createIndiciesMap(graph);
 
-        HashMap<Node, Integer> indicies = createIndiciesMap(hgraph);
+            pageranks = calculatePagerank(graph, indicies, isDirected, useEdgeWeight, epsilon, probability);
 
-        pageranks = calculatePagerank(hgraph, indicies, isDirected, useEdgeWeight, epsilon, probability);
-
-        saveCalculatedValues(hgraph, column, indicies, pageranks);
-
-        hgraph.readUnlockAll();
+            saveCalculatedValues(graph, column, indicies, pageranks);
+        } finally {
+            graph.readUnlockAll();
+        }
     }
 
     private Column initializeAttributeColunms(GraphModel graphModel) {
@@ -157,116 +162,202 @@ public class PageRank implements Statistics, LongTask {
         return pagerankCol;
     }
 
-    private void saveCalculatedValues(Graph hgraph, Column attributeColumn, HashMap<Node, Integer> indicies,
+    private void saveCalculatedValues(Graph graph, Column attributeColumn, HashMap<Node, Integer> indicies,
             double[] nodePagrank) {
-        for (Node s : hgraph.getNodes()) {
+        for (Node s : graph.getNodes()) {
             int s_index = indicies.get(s);
 
             s.setAttribute(attributeColumn, nodePagrank[s_index]);
         }
     }
 
-    private void setInitialValues(Graph hgraph, double[] pagerankValues, double[] weights, boolean directed, boolean useWeights) {
-        int N = hgraph.getNodeCount();
-        int index = 0;
-        for (Node s : hgraph.getNodes()) {
-            pagerankValues[index] = 1.0f / N;
+    private void setInitialValues(Graph graph, Map<Node, Integer> indicies, double[] pagerankValues, double[] weights, boolean directed, boolean useWeights) {
+        final int N = graph.getNodeCount();
+        for (Node s : graph.getNodes()) {
+            final int index = indicies.get(s);
+            pagerankValues[index] = 1.0 / N;
             if (useWeights) {
                 double sum = 0;
                 EdgeIterable eIter;
                 if (directed) {
-                    eIter = ((DirectedGraph) hgraph).getOutEdges(s);
+                    eIter = ((DirectedGraph) graph).getOutEdges(s);
                 } else {
-                    eIter = ((UndirectedGraph) hgraph).getEdges(s);
+                    eIter = ((UndirectedGraph) graph).getEdges(s);
                 }
                 for (Edge edge : eIter) {
-                    sum += edge.getWeight();
+                    if(!edge.isSelfLoop()){
+                        sum += edge.getWeight();
+                    }
                 }
                 weights[index] = sum;
             }
-            index++;
         }
     }
 
-    private double calculateR(Graph hgraph, double[] pagerankValues, HashMap<Node, Integer> indicies, boolean directed, double prob) {
-        int N = hgraph.getNodeCount();
-        double r = 0;
-        for (Node s : hgraph.getNodes()) {
+    private double calculateR(Graph graph, double[] pagerankValues, HashMap<Node, Integer> indicies, boolean directed, double prob) {
+        int N = graph.getNodeCount();
+        double r = (1.0 - prob) / N;//Initialize to damping factor
+
+        //Calculate dangling nodes (nodes without out edges) contribution to all other nodes.
+        //Necessary for all nodes page rank values sum to be 1
+        NodeIterable nodesIterable = graph.getNodes();
+        double danglingNodesRankContrib = 0;
+        for (Node s : graph.getNodes()) {
             int s_index = indicies.get(s);
-            boolean out;
+            int outDegree;
             if (directed) {
-                out = ((DirectedGraph) hgraph).getOutDegree(s) > 0;
+                outDegree = ((DirectedGraph) graph).getOutDegree(s);
             } else {
-                out = hgraph.getDegree(s) > 0;
+                outDegree = graph.getDegree(s);
+            }
+            if (outDegree == 0) {
+                danglingNodesRankContrib += pagerankValues[s_index];
             }
 
-            if (out) {
-                r += (1.0 - prob) * (pagerankValues[s_index] / N);
-            } else {
-                r += (pagerankValues[s_index] / N);
-            }
             if (isCanceled) {
-                hgraph.readUnlockAll();
-                return r;
+                nodesIterable.doBreak();
+                break;
             }
         }
+        danglingNodesRankContrib *= prob / N;
+        r += danglingNodesRankContrib;
+
         return r;
     }
 
-    private double updateValueForNode(Graph hgraph, Node s, double[] pagerankValues, double[] weights,
-            HashMap<Node, Integer> indicies, boolean directed, boolean useWeights, double r, double prob) {
-        double res = r;
-        EdgeIterable eIter;
-        if (directed) {
-            eIter = ((DirectedGraph) hgraph).getInEdges(s);
-        } else {
-            eIter = hgraph.getEdges(s);
+    private Map<Node, Set<Node>> calculateInNeighborsPerNode(Graph graph, boolean directed) {
+        Map<Node, Set<Node>> inNeighborsPerNode = new Object2ObjectOpenHashMap<>();
+
+        NodeIterable nodesIterable = graph.getNodes();
+        for (Node node : nodesIterable) {
+            Set<Node> nodeInNeighbors = new ObjectOpenHashSet<>();
+
+            EdgeIterable edgesIterable;
+            if (directed) {
+                edgesIterable = ((DirectedGraph) graph).getInEdges(node);
+            } else {
+                edgesIterable = graph.getEdges(node);
+            }
+
+            for (Edge edge : edgesIterable) {
+                if (!edge.isSelfLoop()) {
+                    Node neighbor = graph.getOpposite(node, edge);
+                    nodeInNeighbors.add(neighbor);
+                }
+
+                if (isCanceled) {
+                    edgesIterable.doBreak();
+                    break;
+                }
+            }
+
+            inNeighborsPerNode.put(node, nodeInNeighbors);
+
+            if (isCanceled) {
+                nodesIterable.doBreak();
+                break;
+            }
         }
 
-        for (Edge edge : eIter) {
-            Node neighbor = hgraph.getOpposite(s, edge);
-            int neigh_index = indicies.get(neighbor);
-            int normalize;
-            if (directed) {
-                normalize = ((DirectedGraph) hgraph).getOutDegree(neighbor);
-            } else {
-                normalize = hgraph.getDegree(neighbor);
-            }
-            if (useWeights) {
-                double weight = edge.getWeight() / weights[neigh_index];
-                res += prob * pagerankValues[neigh_index] * weight;
-            } else {
-                res += prob * (pagerankValues[neigh_index] / normalize);
+        return inNeighborsPerNode;
+    }
+
+    private Map<Node, Object2DoubleOpenHashMap<Node>> calculateInWeightPerNodeAndNeighbor(Graph graph, boolean directed, boolean useWeights) {
+        Object2ObjectOpenHashMap<Node, Object2DoubleOpenHashMap<Node>> inWeightPerNodeAndNeighbor = new Object2ObjectOpenHashMap<>();
+
+        if (useWeights) {
+            NodeIterable nodesIterable = graph.getNodes();
+            for (Node node : nodesIterable) {
+                Object2DoubleOpenHashMap<Node> inWeightPerNeighbor = new Object2DoubleOpenHashMap<>();
+                inWeightPerNeighbor.defaultReturnValue(0);
+
+                EdgeIterable edgesIterable;
+                if (directed) {
+                    edgesIterable = ((DirectedGraph) graph).getInEdges(node);
+                } else {
+                    edgesIterable = graph.getEdges(node);
+                }
+
+                for (Edge edge : edgesIterable) {
+                    if (!edge.isSelfLoop()) {
+                        Node neighbor = graph.getOpposite(node, edge);
+                        inWeightPerNeighbor.addTo(neighbor, edge.getWeight());
+                    }
+
+                    if (isCanceled) {
+                        edgesIterable.doBreak();
+                        break;
+                    }
+                }
+
+                if (isCanceled) {
+                    nodesIterable.doBreak();
+                    break;
+                }
+                
+                inWeightPerNodeAndNeighbor.put(node, inWeightPerNeighbor);
             }
         }
+
+        return inWeightPerNodeAndNeighbor;
+    }
+
+    private double updateValueForNode(Graph graph, Node node, double[] pagerankValues, double[] weights,
+            HashMap<Node, Integer> indicies, boolean directed, boolean useWeights, double r, double prob,
+            Map<Node, Set<Node>> inNeighborsPerNode, final Object2DoubleOpenHashMap<Node> inWeightPerNeighbor) {
+        double res = r;
+
+        double sumNeighbors = 0;
+        for (Node neighbor : inNeighborsPerNode.get(node)) {
+            int neigh_index = indicies.get(neighbor);
+
+            if (useWeights) {
+                double weight = inWeightPerNeighbor.getDouble(neighbor) / weights[neigh_index];
+                sumNeighbors += pagerankValues[neigh_index] * weight;
+            } else {
+                int outDegree;
+                if (directed) {
+                    outDegree = ((DirectedGraph) graph).getOutDegree(neighbor);
+                } else {
+                    outDegree = graph.getDegree(neighbor);
+                }
+                sumNeighbors += (pagerankValues[neigh_index] / outDegree);
+            }
+        }
+
+        res += prob * sumNeighbors;
+
         return res;
     }
 
-    double[] calculatePagerank(Graph hgraph, HashMap<Node, Integer> indicies,
+    double[] calculatePagerank(Graph graph, HashMap<Node, Integer> indicies,
             boolean directed, boolean useWeights, double eps, double prob) {
-        int N = hgraph.getNodeCount();
+        int N = graph.getNodeCount();
         double[] pagerankValues = new double[N];
         double[] temp = new double[N];
 
         Progress.start(progress);
-        double[] weights = new double[N];
+        final double[] weights = useWeights ? new double[N] : null;
+        final Map<Node, Set<Node>> inNeighborsPerNode = calculateInNeighborsPerNode(graph, directed);
+        final Map<Node, Object2DoubleOpenHashMap<Node>> inWeightPerNodeAndNeighbor = calculateInWeightPerNodeAndNeighbor(graph, directed, useWeights);
 
-        setInitialValues(hgraph, pagerankValues, weights, directed, useWeights);
+        setInitialValues(graph, indicies, pagerankValues, weights, directed, useWeights);
 
         while (true) {
-            double r = calculateR(hgraph, pagerankValues, indicies, directed, prob);
-
             boolean done = true;
-            for (Node s : hgraph.getNodes()) {
+
+            double r = calculateR(graph, pagerankValues, indicies, directed, prob);
+            NodeIterable nodesIterable = graph.getNodes();
+            for (Node s : nodesIterable) {
                 int s_index = indicies.get(s);
-                temp[s_index] = updateValueForNode(hgraph, s, pagerankValues, weights, indicies, directed, useWeights, r, prob);
+                temp[s_index] = updateValueForNode(graph, s, pagerankValues, weights, indicies, directed, useWeights, r, prob, inNeighborsPerNode, inWeightPerNodeAndNeighbor.get(s));
 
                 if ((temp[s_index] - pagerankValues[s_index]) / pagerankValues[s_index] >= eps) {
                     done = false;
                 }
 
                 if (isCanceled) {
-                    hgraph.readUnlockAll();
+                    nodesIterable.doBreak();
                     return pagerankValues;
                 }
 
@@ -281,10 +372,10 @@ public class PageRank implements Statistics, LongTask {
         return pagerankValues;
     }
 
-    public HashMap<Node, Integer> createIndiciesMap(Graph hgraph) {
+    public HashMap<Node, Integer> createIndiciesMap(Graph graph) {
         HashMap<Node, Integer> newIndicies = new HashMap<>();
         int index = 0;
-        for (Node s : hgraph.getNodes()) {
+        for (Node s : graph.getNodes()) {
             newIndicies.put(s, index);
             index++;
         }

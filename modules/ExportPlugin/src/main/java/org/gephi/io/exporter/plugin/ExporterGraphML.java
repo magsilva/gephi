@@ -207,13 +207,6 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         weightKeyE.setAttribute("for", "edge");
         root.appendChild(weightKeyE);
 
-        Element edgeIdKeyE = document.createElement("key");
-        edgeIdKeyE.setAttribute("id", "edgeid");
-        edgeIdKeyE.setAttribute("attr.name", "Edge Id");
-        edgeIdKeyE.setAttribute("attr.type", "string");
-        edgeIdKeyE.setAttribute("for", "edge");
-        root.appendChild(edgeIdKeyE);
-
         if (exportColors) {
             Element colorRKeyE = document.createElement("key");
             colorRKeyE.setAttribute("id", "r");
@@ -438,11 +431,9 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
     private Element createEdge(Document document, Edge e, Graph graph) throws Exception {
         Element edgeE = document.createElement("edge");
 
+        edgeE.setAttribute("id", e.getId().toString());
         edgeE.setAttribute("source", e.getSource().getId().toString());
         edgeE.setAttribute("target", e.getTarget().getId().toString());
-
-        Element idE = createEdgeId(document, e);
-        edgeE.appendChild(idE);
 
         //Label
         if (e.getLabel() != null && !e.getLabel().isEmpty()) {
@@ -453,10 +444,19 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         Element weightE = createEdgeWeight(document, e, graph);
         edgeE.appendChild(weightE);
 
-        if (e.isDirected() && !graph.isDirected()) {
-            edgeE.setAttribute("type", "directed");
-        } else if (!e.isDirected() && graph.isDirected()) {
-            edgeE.setAttribute("type", "undirected");
+        boolean directedEdgeDefault = graph.isDirected() || graph.isMixed();
+        if (e.isDirected() && !directedEdgeDefault) {
+            edgeE.setAttribute("directed", "true");
+        } else if (!e.isDirected() && directedEdgeDefault) {
+            edgeE.setAttribute("directed", "false");
+        }
+
+        if (e.getTypeLabel() != null) {
+            //Edge labels not retained on graphml export https://github.com/gephi/gephi/issues/1516
+            String typeLabel = e.getTypeLabel().toString().trim();
+            if (!typeLabel.isEmpty()) {
+                edgeE.setAttribute("label", typeLabel);
+            }
         }
 
         //Attribute values
@@ -554,14 +554,6 @@ public class ExporterGraphML implements GraphExporter, CharacterExporter, LongTa
         labelE.setTextContent(n.getLabel());
 
         return labelE;
-    }
-
-    private Element createEdgeId(Document document, Edge e) throws Exception {
-        Element idE = document.createElement("data");
-        idE.setAttribute("key", "edgeid");
-        idE.setTextContent(e.getId().toString());
-
-        return idE;
     }
 
     private Element createEdgeWeight(Document document, Edge e, Graph graph) throws Exception {

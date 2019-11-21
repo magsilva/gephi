@@ -42,6 +42,8 @@
 package org.gephi.filters;
 
 import java.beans.PropertyEditorManager;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import org.gephi.filters.FilterThread.PropertyModifier;
 import org.gephi.filters.api.FilterController;
@@ -76,7 +78,8 @@ import org.openide.util.lookup.ServiceProviders;
  * @author Mathieu Bastian
  */
 @ServiceProviders({
-    @ServiceProvider(service = FilterController.class),
+    @ServiceProvider(service = FilterController.class)
+    ,
     @ServiceProvider(service = PropertyExecutor.class)})
 public class FilterControllerImpl implements FilterController, PropertyExecutor {
 
@@ -167,7 +170,7 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
             model.addFirst(absQuery);
 
             //Init filters with default graph
-            Graph graph = null;
+            Graph graph;
             if (model != null && model.getGraphModel() != null) {
                 graph = model.getGraphModel().getGraph();
             } else {
@@ -207,7 +210,7 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
     public void setSubQuery(Query query, Query subQuery) {
         //Init subquery when new filter
         if (subQuery.getParent() == null && subQuery != model.getCurrentQuery()) {
-            Graph graph = null;
+            Graph graph;
             if (model != null && model.getGraphModel() != null) {
                 graph = model.getGraphModel().getGraph();
             } else {
@@ -290,7 +293,7 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
         } else {
             VisualizationController visController = Lookup.getDefault().lookup(VisualizationController.class);
             if (visController != null) {
-                visController.selectNodes(null);
+                visController.resetSelection();
             }
         }
     }
@@ -311,20 +314,25 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
         }
         Column nodeCol = result.getModel().getNodeTable().getColumn("filter_" + title);
         if (nodeCol == null) {
-            nodeCol = result.getModel().getNodeTable().addColumn("filter_" + title, title, Boolean.class, Origin.DATA, Boolean.FALSE, false);
+            nodeCol = result.getModel().getNodeTable().addColumn("filter_" + title, title, Boolean.class, Origin.DATA, Boolean.FALSE, true);
         }
         Column edgeCol = result.getModel().getEdgeTable().getColumn("filter_" + title);
         if (edgeCol == null) {
-            edgeCol = result.getModel().getEdgeTable().addColumn("filter_" + title, title, Boolean.class, Origin.DATA, Boolean.FALSE, false);
+            edgeCol = result.getModel().getEdgeTable().addColumn("filter_" + title, title, Boolean.class, Origin.DATA, Boolean.FALSE, true);
         }
-        result.readLock();
-        for (Node n : result.getNodes()) {
-            n.setAttribute(nodeCol, Boolean.TRUE);
+
+        result.writeLock();
+        try {
+            for (Node n : result.getNodes()) {
+                n.setAttribute(nodeCol, Boolean.TRUE);
+            }
+            for (Edge e : result.getEdges()) {
+                e.setAttribute(edgeCol, Boolean.TRUE);
+            }
+        } finally {
+            result.writeUnlock();
+            result.readUnlockAll();
         }
-        for (Edge e : result.getEdges()) {
-            e.setAttribute(edgeCol, Boolean.TRUE);
-        }
-        result.readUnlock();
         //StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(FilterControllerImpl.class, "FilterController.exportToColumn.status", title));
     }
 
@@ -359,6 +367,17 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
                 Workspace newWorkspace = pc.newWorkspace(pc.getCurrentProject());
                 GraphModel graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel(newWorkspace);
                 graphModel.bridge().copyNodes(graphView.getNodes().toArray());
+                Graph graph = graphModel.getGraph();
+                List<Edge> edgesToRemove = new ArrayList<>();
+                for (Edge edge : graph.getEdges()) {
+                    if(!graphView.hasEdge(edge.getId())){
+                        edgesToRemove.add(edge);
+                    }
+                }
+                if(!edgesToRemove.isEmpty()){
+                    graph.removeAllEdges(edgesToRemove);
+                }
+                
                 Progress.finish(ticket);
                 String workspaceName = newWorkspace.getLookup().lookup(WorkspaceInformation.class).getName();
                 //StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(FilterControllerImpl.class, "FilterController.exportToNewWorkspace.status", workspaceName));
@@ -380,16 +399,21 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
             result = (Graph) processor.process((AbstractQueryImpl) query, model.getGraphModel());
         }
         Graph fullGraph = model.getGraphModel().getGraph();
-        fullGraph.readLock();
-        for (Node n : fullGraph.getNodes()) {
-            boolean inView = result.contains(n);
-            n.getTextProperties().setVisible(inView);
+        
+        fullGraph.writeLock();
+        try {
+            for (Node n : fullGraph.getNodes()) {
+                boolean inView = result.contains(n);
+                n.getTextProperties().setVisible(inView);
+            }
+            for (Edge e : fullGraph.getEdges()) {
+                boolean inView = result.contains(e);
+                e.getTextProperties().setVisible(inView);
+            }
+        } finally {
+            fullGraph.writeUnlock();
+            fullGraph.readUnlockAll();
         }
-        for (Edge e : fullGraph.getEdges()) {
-            boolean inView = result.contains(e);
-            e.getTextProperties().setVisible(inView);
-        }
-        fullGraph.readUnlock();
     }
 
     @Override
@@ -430,7 +454,7 @@ public class FilterControllerImpl implements FilterController, PropertyExecutor 
                 return;
             }
             AbstractQueryImpl rootQuery = ((AbstractQueryImpl) query).getRoot();
-            FilterThread filterThread = null;
+            FilterThread filterThread;
             if ((filterThread = model.getFilterThread()) != null && model.getCurrentQuery() == rootQuery) {
                 if (Thread.currentThread().equals(filterThread)) {
                     //Called inside of the thread, in init for instance. Update normally.
